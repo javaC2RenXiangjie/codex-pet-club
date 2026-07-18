@@ -35,17 +35,17 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
   assert.match(html, /<title>Codex Pet Club · 桌宠开源俱乐部<\/title>/i);
   assert.match(html, /领一只会陪你/);
   assert.match(html, /挑一只带走/);
-  assert.match(html, /像素柯基/);
-  assert.match(html, /云朵水獭/);
+  assert.match(html, /复制唯一 ID/);
+  assert.match(html, /SKILL ONLY/);
   assert.match(html, /官方 Skill/);
   assert.match(html, /codex-pet-club-skill\.zip/);
   assert.match(html, /github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
   assert.match(html, /分享我的桌宠/);
-  assert.match(html, /\/downloads\/pixel-corgi-source\.zip/);
+  assert.doesNotMatch(html, /-source\.zip|拿源文件|直接下载可编辑的源文件/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("ships editable pet source kits and removes starter-only code", async () => {
+test("ships only the official Skill and removes direct pet downloads", async () => {
   const [page, layout, packageJson, downloads] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
@@ -53,9 +53,10 @@ test("ships editable pet source kits and removes starter-only code", async () =>
     readdir(new URL("../public/downloads/", import.meta.url)),
   ]);
 
-  assert.match(page, /const categories: Category\[\]/);
-  assert.match(page, /\/downloads\/\$\{pet\.slug\}-source\.zip/);
-  assert.match(page, /contributor-template\.zip/);
+  assert.match(page, /type RegistryPet/);
+  assert.match(page, /copyPetCommand/);
+  assert.match(page, /UNIQUE PET ID/);
+  assert.doesNotMatch(page, /-source\.zip|contributor-template\.zip|拿源文件/);
   assert.match(page, /codex-pet-club-skill\.zip/);
   assert.match(page, /https:\/\/github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
   assert.match(page, /id="skill"/);
@@ -63,16 +64,7 @@ test("ships editable pet source kits and removes starter-only code", async () =>
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 
-  assert.deepEqual(downloads.sort(), [
-    "cloud-otter-source.zip",
-    "code-ghost-source.zip",
-    "codex-pet-club-skill.zip",
-    "contributor-template.zip",
-    "mecha-dragon-source.zip",
-    "neon-black-cat-source.zip",
-    "pixel-corgi-source.zip",
-    "retro-tv-source.zip",
-  ]);
+  assert.deepEqual(downloads.sort(), ["codex-pet-club-skill.zip"]);
 
   for (const name of downloads) {
     const bytes = await readFile(new URL(`../public/downloads/${name}`, import.meta.url));
@@ -87,8 +79,8 @@ test("declares registry storage and exposes the pet API", async () => {
   const [hosting, listRoute, detailRoute, packageRoute] = await Promise.all([
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../app/api/pets/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/pets/[slug]/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/pets/[slug]/package/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/pets/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/pets/[id]/package/route.ts", import.meta.url), "utf8"),
   ]);
 
   assert.deepEqual(JSON.parse(hosting), { d1: "DB", r2: "PET_FILES" });
@@ -96,4 +88,6 @@ test("declares registry storage and exposes the pet API", async () => {
   assert.match(listRoute, /export async function POST/);
   assert.match(detailRoute, /getPublishedPet/);
   assert.match(packageRoute, /getPublishedPackage/);
+  assert.match(packageRoute, /x-pet-key/);
+  assert.match(packageRoute, /x-codex-pet-client/);
 });

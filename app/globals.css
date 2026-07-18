@@ -185,6 +185,7 @@ button { color: inherit; }
 }
 .pet-preview--large { width: 190px; height: 190px; margin: 0; border: 2px solid var(--line); border-radius: 24px 18px 28px 16px; box-shadow: 7px 7px 0 var(--line); }
 .pet-emoji { position: relative; z-index: 2; font-family: "Segoe UI Emoji", sans-serif; font-size: 100px; filter: drop-shadow(0 7px 0 rgba(30,36,33,.14)); animation: pet-bob 3.4s steps(2, jump-none) infinite; }
+.pet-emoji--letter { display: grid; place-items: center; width: 96px; height: 96px; border: 2px solid var(--line); border-radius: 42% 48% 44% 36%; color: var(--ink); background: var(--pet-accent); font: 900 46px var(--font-geist-mono), monospace; box-shadow: 5px 6px 0 var(--line); }
 .pet-preview--large .pet-emoji { font-size: 108px; }
 .pet-shadow { position: absolute; z-index: 1; left: 50%; bottom: 36px; width: 92px; height: 16px; border-radius: 50%; background: rgba(30,36,33,.16); transform: translateX(-50%); }
 .pet-status { position: absolute; z-index: 3; left: 16px; top: 16px; padding: 5px 7px; color: white; background: var(--pet-color); border: 1.5px solid var(--line); font: 800 9px var(--font-geist-mono), monospace; letter-spacing: .08em; }
@@ -214,7 +215,7 @@ button { color: inherit; }
 .pet-card { position: relative; min-width: 0; border: 2px solid var(--line); border-radius: 16px 10px 18px 12px; background: var(--paper); box-shadow: var(--shadow); overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
 .pet-card:hover { transform: translate(-2px, -3px); box-shadow: 10px 11px 0 var(--line); }
 .card-number { position: absolute; z-index: 6; top: 12px; right: 12px; display: grid; place-items: center; width: 34px; height: 30px; background: var(--paper); border: 1.5px solid var(--line); font: 800 10px var(--font-geist-mono), monospace; transform: rotate(3deg); }
-.pet-meta, .pet-card h3, .pet-card > p, .tag-row, .card-footer { margin-inline: 20px; }
+.pet-meta, .pet-card h3, .pet-card > p, .tag-row, .pet-id, .card-footer { margin-inline: 20px; }
 .pet-meta { display: flex; justify-content: space-between; align-items: center; }
 .category-pill { padding: 5px 8px; border-radius: 4px; background: #e4e8d1; font: 750 10px var(--font-geist-mono), monospace; }
 .download-count { color: var(--muted); font: 700 11px var(--font-geist-mono), monospace; }
@@ -222,11 +223,15 @@ button { color: inherit; }
 .pet-card > p { min-height: 70px; margin-top: 0; margin-bottom: 16px; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag-row span { padding: 5px 7px; border: 1px solid #cfcec0; border-radius: 5px; color: #676c63; font: 9px var(--font-geist-mono), monospace; }
+.pet-id { position: relative; display: grid; width: calc(100% - 40px); gap: 4px; margin-top: 16px; padding: 11px 42px 11px 12px; text-align: left; border: 1.5px dashed #7f847b; border-radius: 7px; color: var(--ink); background: #f1f0e6; cursor: pointer; }
+.pet-id small { color: var(--muted); font: 750 8px var(--font-geist-mono), monospace; letter-spacing: .08em; }
+.pet-id code { overflow: hidden; font: 700 10px var(--font-geist-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }
+.pet-id > span { position: absolute; top: 50%; right: 10px; padding: 4px 5px; border: 1px solid #b6b9ae; border-radius: 4px; background: var(--paper); font-size: 9px; font-weight: 800; transform: translateY(-50%); }
 .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding: 16px 0 18px; border-top: 1.5px dashed #b8baaf; }
 .author { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .author > span { display: grid; flex: 0 0 auto; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #dcd7ca; font-size: 10px; font-weight: 800; }
 .author small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.card-footer > a { flex: 0 0 auto; padding: 9px 11px; background: var(--coral); border: 1.5px solid var(--line); border-radius: 6px; font-size: 11px; font-weight: 850; box-shadow: 2px 2px 0 var(--line); }
+.card-footer > :is(a, button) { flex: 0 0 auto; padding: 9px 11px; color: var(--ink); background: var(--coral); border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 850; box-shadow: 2px 2px 0 var(--line); }
 .empty-state { padding: 80px 20px; text-align: center; border: 2px dashed rgba(30,36,33,.35); border-radius: 18px; background: rgba(255,250,240,.55); }
 .empty-state > span { font: 700 44px var(--font-geist-mono), monospace; }
 .empty-state h3 { margin: 12px 0 6px; font-size: 24px; }

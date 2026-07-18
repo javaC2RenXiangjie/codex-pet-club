@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-type Category = "全部" | "像素" | "软萌" | "酷酷" | "极简";
+import { useEffect, useMemo, useState } from "react";
 
 type Pet = {
   name: string;
   slug: string;
   icon: string;
-  category: Exclude<Category, "全部">;
+  category: string;
   color: string;
   accent: string;
   description: string;
@@ -17,10 +15,21 @@ type Pet = {
   tags: string[];
 };
 
-const categories: Category[] = ["全部", "像素", "软萌", "酷酷", "极简"];
+type RegistryPet = {
+  id: string;
+  petKey: string;
+  displayName: string;
+  description: string;
+  author: string;
+  license: string;
+  sha256: string;
+  sizeBytes: number;
+  updatedAt: string;
+};
+
 const skillRepositoryUrl = "https://github.com/javaC2RenXiangjie/codex-pet-club-skill";
 
-const pets: Pet[] = [
+const heroPets: Pet[] = [
   {
     name: "像素柯基",
     slug: "pixel-corgi",
@@ -114,44 +123,86 @@ function PetPreview({ pet, large = false }: { pet: Pet; large?: boolean }) {
   );
 }
 
+function RegistryPetPreview({ pet, index }: { pet: RegistryPet; index: number }) {
+  const palettes = [
+    ["#f5a15b", "#ffe0ae"],
+    ["#171a26", "#a5f4d1"],
+    ["#5f73c9", "#d9ddff"],
+    ["#9dd5cb", "#e4fff8"],
+    ["#b79be6", "#f0e5ff"],
+    ["#ef6f5d", "#ffd7bd"],
+  ];
+  const [color, accent] = palettes[index % palettes.length];
+  return (
+    <div
+      className="pet-preview"
+      style={{ "--pet-color": color, "--pet-accent": accent } as React.CSSProperties}
+      aria-hidden="true"
+    >
+      <span className="pixel-dot pixel-dot--one" />
+      <span className="pixel-dot pixel-dot--two" />
+      <span className="pet-emoji pet-emoji--letter">{pet.displayName.slice(0, 1)}</span>
+      <span className="pet-shadow" />
+      <span className="pet-status">V2 READY</span>
+    </div>
+  );
+}
+
 export default function Home() {
-  const [category, setCategory] = useState<Category>("全部");
   const [query, setQuery] = useState("");
   const [showSubmit, setShowSubmit] = useState(false);
   const [toast, setToast] = useState("");
+  const [registryPets, setRegistryPets] = useState<RegistryPet[]>([]);
+  const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/pets", { headers: { accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Registry returned ${response.status}`);
+        return response.json() as Promise<{ pets?: RegistryPet[] }>;
+      })
+      .then((data) => {
+        if (!active) return;
+        setRegistryPets(Array.isArray(data.pets) ? data.pets : []);
+        setCatalogState("ready");
+      })
+      .catch(() => {
+        if (active) setCatalogState("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredPets = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return pets.filter((pet) => {
-      const inCategory = category === "全部" || pet.category === category;
-      const inSearch =
-        !keyword ||
-        [pet.name, pet.description, pet.author, pet.category, ...pet.tags]
-          .join(" ")
-          .toLowerCase()
-          .includes(keyword);
-      return inCategory && inSearch;
-    });
-  }, [category, query]);
+    return registryPets.filter((pet) =>
+      !keyword ||
+      [pet.id, pet.petKey, pet.displayName, pet.description, pet.author, pet.license]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }, [query, registryPets]);
 
   function flash(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2800);
   }
 
-  async function copyChecklist() {
-    const checklist =
-      "Codex Pet Club 投稿清单：\n1. 桌宠名称与一句话介绍\n2. 源文件压缩包\n3. 预览图或 GIF\n4. 开源许可\n5. 作者署名与链接";
+  async function copyPetCommand(pet: RegistryPet) {
+    const command = `使用 $codex-pet-club，把这个桌宠下载到我本地，ID：${pet.id}`;
     try {
-      await navigator.clipboard.writeText(checklist);
-      flash("投稿清单已复制");
+      await navigator.clipboard.writeText(command);
+      flash(`${pet.displayName} 的安装指令已复制`);
     } catch {
-      flash("请下载投稿模板查看清单");
+      flash(`请复制桌宠 ID：${pet.id}`);
     }
   }
 
   async function copySkillPrompt() {
-    const prompt = `使用 $codex-pet-club，把桌宠库配置为 ${window.location.origin}，然后列出可以直接安装的桌宠。`;
+    const prompt = `使用 $codex-pet-club，把桌宠库配置为 ${window.location.origin}。以后我提供桌宠 ID 时，只通过 Skill 下载、校验并安装到 Codex。`;
     try {
       await navigator.clipboard.writeText(prompt);
       flash("Skill 使用提示已复制，粘贴给 Codex 即可");
@@ -185,8 +236,8 @@ export default function Home() {
           <div className="eyebrow"><span>OPEN SOURCE</span> · MADE FOR CODEX</div>
           <h1>领一只会陪你<br />工作的桌宠</h1>
           <p>
-            找到喜欢的桌宠，直接下载可编辑的源文件。换配色、改动作、加性格，
-            再把你的版本分享回来。
+            在网站找到喜欢的桌宠，复制它的唯一 ID，再交给官方 Skill。
+            下载、校验和安装全部由 Codex 自动完成。
           </p>
           <div className="hero-actions">
             <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
@@ -197,17 +248,17 @@ export default function Home() {
             </a>
           </div>
           <div className="trust-row" aria-label="社区数据">
-            <span><strong>06</strong> 首发桌宠</span>
-            <span><strong>100%</strong> 开放源文件</span>
-            <span><strong>01</strong> 官方自动化 Skill</span>
+            <span><strong>{String(registryPets.length).padStart(2, "0")}</strong> 已发布桌宠</span>
+            <span><strong>1 ID</strong> 对应一个桌宠</span>
+            <span><strong>SKILL</strong> 唯一安装通道</span>
           </div>
         </div>
 
         <div className="hero-stage" aria-label="桌宠预览">
           <div className="stage-note stage-note--top">今天也一起写点好东西</div>
-          <div className="hero-pet hero-pet--one"><PetPreview pet={pets[0]} large /></div>
-          <div className="hero-pet hero-pet--two"><PetPreview pet={pets[3]} /></div>
-          <div className="hero-pet hero-pet--three"><PetPreview pet={pets[4]} /></div>
+          <div className="hero-pet hero-pet--one"><PetPreview pet={heroPets[0]} large /></div>
+          <div className="hero-pet hero-pet--two"><PetPreview pet={heroPets[3]} /></div>
+          <div className="hero-pet hero-pet--three"><PetPreview pet={heroPets[4]} /></div>
           <div className="stage-window">
             <div className="window-bar"><i /><i /><i /><span>pet-playground.tsx</span></div>
             <code>
@@ -215,12 +266,12 @@ export default function Home() {
               <span>export</span> default today;
             </code>
           </div>
-          <div className="stage-sticker">SOURCE<br />INSIDE</div>
+          <div className="stage-sticker">SKILL<br />ONLY</div>
         </div>
       </section>
 
       <div className="ticker" aria-hidden="true">
-        <div>DOWNLOAD · REMIX · SHARE · DOWNLOAD · REMIX · SHARE · DOWNLOAD · REMIX · SHARE ·</div>
+        <div>FIND · COPY ID · ASK CODEX · INSTALL · FIND · COPY ID · ASK CODEX · INSTALL ·</div>
       </div>
 
       <section className="catalog-section" id="catalog">
@@ -229,21 +280,12 @@ export default function Home() {
             <span className="section-kicker">PET LIBRARY / 001</span>
             <h2>挑一只带走</h2>
           </div>
-          <p>每份下载都包含可编辑配置、使用说明与许可文件。先拿走，慢慢改。</p>
+          <p>这里只展示已经通过 v2 校验并发布的桌宠；网页不提供任何桌宠文件直链。</p>
         </div>
 
         <div className="catalog-toolbar">
           <div className="filters" role="group" aria-label="按风格筛选">
-            {categories.map((item) => (
-              <button
-                key={item}
-                className={category === item ? "active" : ""}
-                onClick={() => setCategory(item)}
-                aria-pressed={category === item}
-              >
-                {item}
-              </button>
-            ))}
+            <button className="active" aria-pressed="true">全部已发布</button>
           </div>
           <label className="search-box">
             <span aria-hidden="true">⌕</span>
@@ -251,55 +293,57 @@ export default function Home() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索名字、作者或标签"
+              placeholder="搜索名字、作者或桌宠 ID"
             />
             <kbd>⌘ K</kbd>
           </label>
         </div>
 
         <div className="catalog-notice">
-          <span>BETA</span>
-          当前卡片是创意源包；通过 v2 校验和审核的桌宠会出现“用 Skill 安装”标记，并支持一句话装进 Codex。
+          <span>SKILL ONLY</span>
+          复制卡片中的唯一 ID，然后对 Codex 说：“把这个桌宠下载到我本地，ID：xxxxxxxx”。
         </div>
 
-        {filteredPets.length > 0 ? (
+        {catalogState === "ready" && filteredPets.length > 0 ? (
           <div className="pet-grid">
             {filteredPets.map((pet, index) => (
-              <article className="pet-card" key={pet.slug}>
+              <article className="pet-card" key={pet.id}>
                 <div className="card-number">{String(index + 1).padStart(2, "0")}</div>
-                <PetPreview pet={pet} />
+                <RegistryPetPreview pet={pet} index={index} />
                 <div className="pet-meta">
-                  <span className="category-pill">{pet.category}</span>
-                  <span className="download-count">↓ {pet.downloads}</span>
+                  <span className="category-pill">CODEX V2</span>
+                  <span className="download-count">SKILL ONLY</span>
                 </div>
-                <h3>{pet.name}</h3>
+                <h3>{pet.displayName}</h3>
                 <p>{pet.description}</p>
                 <div className="tag-row">
-                  {pet.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                  <span>{pet.license}</span>
+                  <span>{pet.petKey}</span>
+                  <span>SHA-256</span>
                 </div>
+                <button className="pet-id" onClick={() => copyPetCommand(pet)} aria-label={`复制 ${pet.displayName} 的桌宠 ID`}>
+                  <small>UNIQUE PET ID</small>
+                  <code>{pet.id}</code>
+                  <span>复制</span>
+                </button>
                 <div className="card-footer">
                   <div className="author">
-                    <span>{pet.author.slice(0, 1)}</span>
-                    <small>by {pet.author}</small>
+                    <span>{(pet.author || "C").slice(0, 1)}</span>
+                    <small>by {pet.author || "Community"}</small>
                   </div>
-                  <a
-                    href={`/downloads/${pet.slug}-source.zip`}
-                    download
-                    onClick={() => flash(`${pet.name} 源码包开始下载`)}
-                    aria-label={`下载 ${pet.name} 源码包`}
-                  >
-                    拿源文件 <span aria-hidden="true">↘</span>
-                  </a>
+                  <button onClick={() => copyPetCommand(pet)}>
+                    复制安装指令 <span aria-hidden="true">↗</span>
+                  </button>
                 </div>
               </article>
             ))}
           </div>
         ) : (
           <div className="empty-state">
-            <span>∅</span>
-            <h3>暂时没找到这只桌宠</h3>
-            <p>换个关键词，或者清空筛选继续逛。</p>
-            <button onClick={() => { setCategory("全部"); setQuery(""); }}>清空筛选</button>
+            <span>{catalogState === "loading" ? "…" : "∅"}</span>
+            <h3>{catalogState === "loading" ? "正在连接桌宠库" : catalogState === "error" ? "桌宠库暂时不可用" : query ? "没有匹配的桌宠" : "首批桌宠正在审核上架"}</h3>
+            <p>{catalogState === "ready" ? "只有验证通过、确实能装进 Codex 的桌宠才会出现在这里。" : "稍后刷新页面重试。"}</p>
+            {query && <button onClick={() => setQuery("")}>清空搜索</button>}
           </div>
         )}
       </section>
@@ -309,8 +353,8 @@ export default function Home() {
           <div className="skill-badge"><span>OFFICIAL</span> SKILL · BETA</div>
           <h2>以后不用再<br />手动搬文件。</h2>
           <p>
-            安装一次 Codex Pet Club Skill，以后只要告诉 Codex 想领养哪只桌宠，
-            或者把本地哪只桌宠分享出去。下载、校验、备份、安装和投稿都由 Skill 完成。
+            安装一次 Codex Pet Club Skill。以后从网站复制唯一 ID，告诉 Codex
+            “把这个桌宠下载到我本地”，Skill 就会完成下载、校验、备份和安装。
           </p>
           <div className="skill-actions">
             <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
@@ -319,14 +363,14 @@ export default function Home() {
             <a className="text-link" href="/downloads/codex-pet-club-skill.zip" download onClick={() => flash("官方 Skill 开始下载")}>直接下载 ZIP</a>
             <button className="text-link" onClick={copySkillPrompt}>复制使用提示</button>
           </div>
-          <small>上传默认进入审核队列；远端文件在安装前会自动验证 v2 清单、图集尺寸和校验和。</small>
+          <small>网站不暴露桌宠包直链；Skill 会按 ID 请求文件，并验证 v2 清单、图集尺寸和校验和。</small>
         </div>
 
         <div className="skill-console" aria-label="Codex Pet Club Skill 使用示例">
           <div className="console-title"><i /><i /><i /><span>Codex · Pet Club</span><b>CONNECTED</b></div>
           <div className="chat-line chat-line--user">
             <span>YOU</span>
-            <p>帮我安装桌宠库里的像素柯基</p>
+            <p>把这个桌宠下载到我本地，ID：9d1ef2a4-55df-4d99-a722-18d1db7cb83a</p>
           </div>
           <div className="chat-line chat-line--codex">
             <span>CODEX</span>
@@ -335,7 +379,7 @@ export default function Home() {
               <code>✓ spriteVersionNumber: 2</code>
               <code>✓ atlas: 1536 × 2288</code>
               <code>✓ checksum matched</code>
-              <strong>已安装到你的 Codex 桌宠目录。</strong>
+              <strong>已安装到 ~/.codex/pets，刷新“宠物”列表即可看到。</strong>
             </div>
           </div>
           <div className="console-divider">OR PUBLISH YOUR OWN</div>
@@ -350,14 +394,14 @@ export default function Home() {
       <section className="how-section" id="how-it-works">
         <div className="how-intro">
           <span className="section-kicker">HOW IT WORKS / 002</span>
-          <h2>下载后，<br />它就是你的了。</h2>
-          <p>所有桌宠都带清晰许可。你可以直接拿源文件，也可以让官方 Skill 自动完成安装与投稿。</p>
+          <h2>复制 ID，<br />剩下交给 Codex。</h2>
+          <p>桌宠文件不从网页下载。唯一 ID 是网站和 Skill 之间的安装凭证。</p>
         </div>
         <ol className="steps">
-          <li><span>01</span><div><strong>挑喜欢的</strong><p>按风格筛选，先看性格和动作设定。</p></div></li>
-          <li><span>02</span><div><strong>让 Skill 安装</strong><p>自动下载、校验、备份旧版本，再装进 Codex。</p></div></li>
-          <li><span>03</span><div><strong>改成你的版本</strong><p>换颜色、改动作，Skill 会先验证本地 v2 包。</p></div></li>
-          <li><span>04</span><div><strong>一句话发布</strong><p>自动打包上传，审核通过后进入公共桌宠库。</p></div></li>
+          <li><span>01</span><div><strong>挑喜欢的</strong><p>网站只展示已验证、可安装的 Codex v2 桌宠。</p></div></li>
+          <li><span>02</span><div><strong>复制唯一 ID</strong><p>每只桌宠一个 ID，不提供文件下载按钮。</p></div></li>
+          <li><span>03</span><div><strong>交给 Skill</strong><p>Codex 按 ID 下载、验签、备份并写入桌宠目录。</p></div></li>
+          <li><span>04</span><div><strong>刷新列表</strong><p>打开设置里的“宠物”，刷新后直接选择新桌宠。</p></div></li>
         </ol>
       </section>
 
@@ -389,7 +433,7 @@ export default function Home() {
             <span className="modal-icon">↗</span>
             <span className="section-kicker">SHARE A PET</span>
             <h2 id="submit-title">把你的桌宠放进来</h2>
-            <p>准备好下面 5 样内容，就可以交给站点维护者收录：</p>
+            <p>投稿也只通过官方 Skill 完成。准备好下面内容，然后告诉 Codex“把我本地的桌宠分享到桌宠库”：</p>
             <ul>
               <li>桌宠名称与一句话介绍</li>
               <li>可编辑源文件，或已完成的 Codex v2 桌宠包</li>
@@ -399,8 +443,7 @@ export default function Home() {
             </ul>
                 <div className="modal-actions">
                   <a className="button button--primary" href="/downloads/codex-pet-club-skill.zip" download onClick={() => flash("官方 Skill 开始下载")}>用 Skill 自动发布</a>
-                  <button className="text-link" onClick={copyChecklist}>仍然手动投稿</button>
-                  <a className="text-link" href="/downloads/contributor-template.zip" download>下载手动模板</a>
+                  <button className="text-link" onClick={copySkillPrompt}>复制 Skill 配置提示</button>
                 </div>
           </section>
         </div>

@@ -23,8 +23,9 @@ type PetRow = {
 };
 
 export type PublicPet = {
-  slug: string;
-  name: string;
+  id: string;
+  petKey: string;
+  displayName: string;
   description: string;
   author: string;
   license: string;
@@ -81,8 +82,9 @@ async function ensureSchema(db: D1Database) {
 
 function toPublicPet(row: PetRow): PublicPet {
   return {
-    slug: row.slug,
-    name: row.name,
+    id: row.id,
+    petKey: row.slug,
+    displayName: row.name,
     description: row.description,
     author: row.author,
     license: row.license,
@@ -108,7 +110,15 @@ export async function listPublishedPets(): Promise<PublicPet[]> {
   return (result.results ?? []).map(toPublicPet);
 }
 
-async function publishedRow(slug: string): Promise<PetRow> {
+function safePublicId(value: string) {
+  const id = value.trim();
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$/.test(id)) {
+    throw new RegistryError("Pet ID is invalid");
+  }
+  return id;
+}
+
+async function publishedRow(publicId: string): Promise<PetRow> {
   const { db } = bindings();
   await ensureSchema(db);
   const row = await db
@@ -116,10 +126,10 @@ async function publishedRow(slug: string): Promise<PetRow> {
       `SELECT id, slug, name, description, author, license, status, file_key,
         sha256, size_bytes, created_at, updated_at, published_at
        FROM pet_submissions
-       WHERE slug = ? AND status = 'published'
+       WHERE id = ? AND status = 'published'
        LIMIT 1`,
     )
-    .bind(slug)
+    .bind(safePublicId(publicId))
     .first<PetRow>();
   if (!row) {
     throw new RegistryError("Published pet not found", 404);
@@ -127,12 +137,12 @@ async function publishedRow(slug: string): Promise<PetRow> {
   return row;
 }
 
-export async function getPublishedPet(slug: string) {
-  return toPublicPet(await publishedRow(slug));
+export async function getPublishedPet(publicId: string) {
+  return toPublicPet(await publishedRow(publicId));
 }
 
-export async function getPublishedPackage(slug: string) {
-  const row = await publishedRow(slug);
+export async function getPublishedPackage(publicId: string) {
+  const row = await publishedRow(publicId);
   const { files } = bindings();
   const object = await files.get(row.file_key);
   if (!object) {
@@ -258,9 +268,17 @@ function decodeManifest(files: Record<string, Uint8Array>) {
   if (manifest.spriteVersionNumber !== 2) {
     throw new RegistryError("pet.json must contain spriteVersionNumber: 2");
   }
-  const name = typeof manifest.name === "string" ? manifest.name.trim() : "";
-  if (!name) {
-    throw new RegistryError("pet.json must contain a name");
+  const petKey = typeof manifest.id === "string" ? safeSlug(manifest.id) : "";
+  if (!petKey) {
+    throw new RegistryError("pet.json must contain a valid id");
+  }
+  const displayName =
+    typeof manifest.displayName === "string" ? manifest.displayName.trim() : "";
+  if (!displayName) {
+    throw new RegistryError("pet.json must contain a displayName");
+  }
+  if (manifest.spritesheetPath !== "spritesheet.webp") {
+    throw new RegistryError('pet.json must contain spritesheetPath: "spritesheet.webp"');
   }
   const [width, height] = webpDimensions(sheet);
   if (width !== EXPECTED_WIDTH || height !== EXPECTED_HEIGHT) {
@@ -268,9 +286,7 @@ function decodeManifest(files: Record<string, Uint8Array>) {
       `Expected a ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT} atlas, got ${width}x${height}`,
     );
   }
-  const slugSource =
-    typeof manifest.slug === "string" ? manifest.slug : prefix.replace(/\/$/, "");
-  return { manifest, name, slug: safeSlug(slugSource) };
+  return { manifest, name: displayName, slug: petKey };
 }
 
 async function sha256Hex(bytes: Uint8Array) {
@@ -292,9 +308,14 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     throw new RegistryError("Package is not a valid ZIP archive");
   }
   const decoded = decodeManifest(extracted);
-  const metadataSlug = typeof metadata.slug === "string" ? safeSlug(metadata.slug) : decoded.slug;
-  if (metadataSlug !== decoded.slug) {
-    throw new RegistryError("Metadata slug does not match pet.json");
+  const metadataPetKey =
+    typeof metadata.petKey === "string"
+      ? safeSlug(metadata.petKey)
+      : typeof metadata.slug === "string"
+        ? safeSlug(metadata.slug)
+        : decoded.slug;
+  if (metadataPetKey !== decoded.slug) {
+    throw new RegistryError("Metadata petKey does not match pet.json id");
   }
   const sha256 = await sha256Hex(bytes);
   if (typeof metadata.sha256 === "string" && metadata.sha256.toLowerCase() !== sha256) {
@@ -345,5 +366,5 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     await files.delete(fileKey);
     throw error;
   }
-  return { id, slug: decoded.slug, status: "pending" as const, sha256 };
+  return { id, petKey: decoded.slug, status: "pending" as const, sha256 };
 }
