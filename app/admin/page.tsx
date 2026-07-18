@@ -214,8 +214,8 @@ export default function AdminPage() {
         </nav>
 
         <div className="admin-sidebar-note">
-          <strong>原型模式</strong>
-          <p>当前管理页尚未接入账号权限，仅建议用于本地开发。</p>
+          <strong>本地管理模式</strong>
+          <p>首个公网版本关闭管理路由；审核台仅在本机开发地址可用。</p>
         </div>
       </aside>
 
@@ -232,8 +232,8 @@ export default function AdminPage() {
         </header>
 
         <div className="admin-security-banner" role="note">
-          <strong>⚠ 暂无登录保护</strong>
-          <span>界面和审核流程已可用；公开部署前必须补充管理员认证。</span>
+          <strong>✓ 公网管理入口已关闭</strong>
+          <span>当前审核台仅供本机使用；后续接入管理员认证后再对线上开放。</span>
         </div>
 
         <section className="admin-stats" aria-label="审核统计">
