@@ -39,7 +39,7 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
   assert.match(html, /SKILL ONLY/);
   assert.match(html, /安装 Skill/);
   assert.match(html, /href="\/skill"/);
-  assert.match(html, /发布桌宠/);
+  assert.match(html, /投稿内测中/);
   assert.doesNotMatch(html, /codex-pet-club-skill\.zip/);
   assert.doesNotMatch(html, /OFFICIAL CODEX SKILL/);
   assert.doesNotMatch(html, /-source\.zip|拿源文件|直接下载可编辑的源文件/);
@@ -119,7 +119,7 @@ test("server-renders the moderation workspace", async () => {
   const html = await response.text();
   assert.match(html, /桌宠审核台/);
   assert.match(html, /待审核/);
-  assert.match(html, /暂无登录保护/);
+  assert.match(html, /公网管理入口已关闭/);
   assert.match(html, /审核队列/);
   assert.match(html, /返回网站/);
 });
@@ -194,4 +194,14 @@ test("published cards use the real animated pet preview", async () => {
   assert.match(player, /frame \/ 7/);
   assert.match(player, /row \/ 10/);
   assert.match(player, /"card" \| "admin" \| "detail"/);
+});
+
+test("first public release keeps moderation and uploads off the public internet", async () => {
+  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+
+  assert.match(worker, /isLoopbackHost/);
+  assert.match(worker, /url\.pathname === "\/admin"/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/api\/admin\/"\)/);
+  assert.match(worker, /request\.method === "POST" && url\.pathname === "\/api\/pets"/);
+  assert.match(worker, /Community submissions are not open in the first public release/);
 });

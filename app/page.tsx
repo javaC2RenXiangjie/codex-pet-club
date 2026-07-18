@@ -167,7 +167,6 @@ function RegistryPetDetail({
 
 export default function Home() {
   const [query, setQuery] = useState("");
-  const [showSubmit, setShowSubmit] = useState(false);
   const [toast, setToast] = useState("");
   const [registryPets, setRegistryPets] = useState<RegistryPet[]>([]);
   const [selectedPet, setSelectedPet] = useState<RegistryPet | null>(null);
@@ -234,8 +233,8 @@ export default function Home() {
         <nav aria-label="主导航">
           <a href="#catalog">桌宠库</a>
           <Link href="/skill">安装 Skill</Link>
-          <button className="nav-submit" onClick={() => setShowSubmit(true)}>
-            发布桌宠 <span aria-hidden="true">↗</span>
+          <button className="nav-submit" disabled title="首个公网版本暂不开放社区投稿">
+            投稿内测中
           </button>
         </nav>
       </header>
@@ -367,10 +366,10 @@ export default function Home() {
         <div>
           <span className="section-kicker">PUBLISH YOUR PET</span>
           <h2>也想把自己的桌宠放进来？</h2>
-          <p>通过 Skill 提交本地桌宠。验证通过后进入审核队列，审核通过才会公开展示。</p>
+          <p>首个公网版本先把浏览和 Skill 安装做稳定。社区投稿将在后台保护与限流完成后开放。</p>
         </div>
-        <button className="button button--dark" onClick={() => setShowSubmit(true)}>
-          查看发布方式 <span aria-hidden="true">↗</span>
+        <button className="button button--dark" disabled>
+          投稿即将开放
         </button>
       </section>
 
@@ -380,7 +379,7 @@ export default function Home() {
           <span><strong>Codex Pet Club</strong><small>桌宠开源俱乐部</small></span>
         </a>
         <p>给认真工作的人，一点可爱的陪伴。</p>
-        <div><a href="#catalog">桌宠目录</a><Link href="/skill">安装 Skill</Link><button onClick={() => setShowSubmit(true)}>投稿</button></div>
+        <div><a href="#catalog">桌宠目录</a><Link href="/skill">安装 Skill</Link><span>投稿内测中</span></div>
       </footer>
 
       {selectedPet && (
@@ -390,28 +389,6 @@ export default function Home() {
           onCopy={copyPetCommand}
           pet={selectedPet}
         />
-      )}
-
-      {showSubmit && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowSubmit(false)}>
-          <section className="submit-modal" role="dialog" aria-modal="true" aria-labelledby="submit-title" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="modal-close" aria-label="关闭投稿说明" onClick={() => setShowSubmit(false)}>×</button>
-            <span className="modal-icon">↗</span>
-            <span className="section-kicker">SHARE A PET</span>
-            <h2 id="submit-title">把你的桌宠放进来</h2>
-            <p>投稿也只通过官方 Skill 完成。准备好下面内容，然后告诉 Codex“把我本地的桌宠分享到桌宠库”：</p>
-            <ul>
-              <li>桌宠名称与一句话介绍</li>
-              <li>可编辑源文件，或已完成的 Codex v2 桌宠包</li>
-              <li>透明背景预览图或 GIF</li>
-              <li>明确的开源许可</li>
-              <li>作者署名与链接</li>
-            </ul>
-                <div className="modal-actions">
-                  <Link className="button button--primary" href="/skill">前往 Skill 页面</Link>
-                </div>
-          </section>
-        </div>
       )}
 
       {toast && <div className="toast" role="status">✓ {toast}</div>}
