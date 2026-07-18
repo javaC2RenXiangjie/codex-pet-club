@@ -1,98 +1,90 @@
-# vinext-starter
+# Codex Pet Club
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Codex Pet Club（桌宠开源俱乐部）是一个面向 Codex 桌面用户的桌宠目录与审核系统。网站负责展示已审核桌宠、提供唯一桌宠 ID，并通过独立的官方 Skill 完成桌宠上传、下载、校验和本地安装。
 
-## Prerequisites
+> 当前版本适合本地演示和继续开发。`/admin` 尚未接入管理员认证，请勿直接公开部署。
 
-- Node.js `>=22.13.0`
+## 核心能力
 
-## Quick Start
+- 公开桌宠目录：只展示审核通过的 Codex v2 桌宠
+- 真实动作预览：列表展示待机动画，详情展示 9 组标准动作
+- Skill-only 安装：网页不暴露桌宠包直链，用户复制唯一 ID 后交给 Codex 安装
+- Skill 投稿：上传 ZIP 后校验清单、图集尺寸、文件路径和 SHA-256
+- 审核工作台：管理员预览动作并通过或拒绝投稿
+- Cloudflare 存储：D1 保存元数据，R2 保存桌宠包
+
+官方 Skill 仓库：[javaC2RenXiangjie/codex-pet-club-skill](https://github.com/javaC2RenXiangjie/codex-pet-club-skill)
+
+## 技术栈
+
+- React 19 + Next.js 16 API 约定
+- vinext + Vite
+- Cloudflare D1 + R2
+- Drizzle ORM（schema 与迁移生成）
+- Node.js 22+
+
+## 本地运行
 
 ```bash
 npm install
 npm run dev
+```
+
+默认本地地址由开发服务器输出；本项目当前演示地址为 `http://localhost:3001`。
+
+常用命令：
+
+```bash
+npm run lint
+npm test
 npm run build
+npm run db:generate
 ```
 
-This starter does not use `wrangler.jsonc`.
+`npm test` 会先执行生产构建，再运行页面与关键路由的结构测试。
 
-## Included Shape
+## 页面与接口
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+| 路径 | 用途 |
+| --- | --- |
+| `/` | 已发布桌宠目录与动作详情 |
+| `/skill` | Skill 安装和桌宠库配置说明 |
+| `/admin` | 本地审核工作台（当前无认证） |
+| `GET /api/pets` | 获取已发布桌宠 |
+| `POST /api/pets` | Skill 提交桌宠包 |
+| `GET /api/pets/:id/preview` | 获取已发布桌宠图集 |
+| `GET /api/pets/:id/package` | 官方 Skill 获取桌宠包 |
+| `GET /api/admin/pets` | 获取审核队列 |
+| `PATCH /api/admin/pets/:id` | 通过或拒绝投稿 |
 
-## Workspace Auth Headers
+## 存储配置
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+`.openai/hosting.json` 声明两个运行时绑定：
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+- `DB`：Cloudflare D1 数据库
+- `PET_FILES`：Cloudflare R2 桌宠包存储桶
 
-Treat the full name as optional and fall back to email when it is absent:
+本地开发数据保存在 `.wrangler/`，不会进入 Git。
 
-```tsx
-import { headers } from "next/headers";
+## 桌宠包要求
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
+- ZIP 最大 32 MiB
+- 解压后最大 96 MiB、最多 128 个文件
+- 包含 `pet.json` 与 `spritesheet.webp`
+- `spriteVersionNumber` 必须为 `2`
+- 图集尺寸必须为 `1536 × 2288`
+- 文件路径不得包含绝对路径或目录穿越
 
-  const displayName = fullName ?? email;
-  // ...
-}
-```
+## 当前限制
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+- 管理后台和管理 API 尚无身份认证与权限控制
+- 投稿接口尚无限流、配额和内容安全扫描
+- “官方 Skill”请求头只是通道约定，不是强身份认证
+- 数据库 schema 仍会在请求中自检，尚未完全切换为部署期迁移
+- 自动化测试以构建和结构断言为主，缺少 D1/R2 集成与完整 E2E
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+详细优先级与迭代计划见 [ROADMAP.md](./ROADMAP.md)。
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## 仓库边界
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+本仓库只保存网站、API、审核台和存储层代码；Skill 的可维护源码保存在独立仓库。仓库目前尚未附带开源许可证，公开可见不等于已授予复制、修改或分发许可。

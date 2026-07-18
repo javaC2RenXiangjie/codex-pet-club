@@ -19,6 +19,8 @@ export const petSubmissions = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     publishedAt: text("published_at"),
+    reviewedAt: text("reviewed_at"),
+    reviewNote: text("review_note").notNull().default(""),
   },
   (table) => [
     uniqueIndex("pet_published_slug_unique")

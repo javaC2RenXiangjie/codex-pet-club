@@ -20,6 +20,8 @@ type PetRow = {
   created_at: string;
   updated_at: string;
   published_at: string | null;
+  reviewed_at: string | null;
+  review_note: string;
 };
 
 export type PublicPet = {
@@ -32,6 +34,14 @@ export type PublicPet = {
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
+};
+
+export type ModerationSubmission = PublicPet & {
+  status: PetRow["status"];
+  createdAt: string;
+  publishedAt: string | null;
+  reviewedAt: string | null;
+  reviewNote: string;
 };
 
 export class RegistryError extends Error {
@@ -69,7 +79,9 @@ async function ensureSchema(db: D1Database) {
       size_bytes INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      published_at TEXT
+      published_at TEXT,
+      reviewed_at TEXT,
+      review_note TEXT NOT NULL DEFAULT ''
     )`),
     db.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS pet_published_slug_unique ON pet_submissions(slug) WHERE status = 'published'",
@@ -78,6 +90,25 @@ async function ensureSchema(db: D1Database) {
       "CREATE INDEX IF NOT EXISTS pet_status_updated_idx ON pet_submissions(status, updated_at DESC)",
     ),
   ]);
+
+  const columns = await db
+    .prepare("PRAGMA table_info(pet_submissions)")
+    .all<{ name: string }>();
+  const names = new Set((columns.results ?? []).map((column) => column.name));
+  const additions: D1PreparedStatement[] = [];
+  if (!names.has("reviewed_at")) {
+    additions.push(db.prepare("ALTER TABLE pet_submissions ADD COLUMN reviewed_at TEXT"));
+  }
+  if (!names.has("review_note")) {
+    additions.push(
+      db.prepare(
+        "ALTER TABLE pet_submissions ADD COLUMN review_note TEXT NOT NULL DEFAULT ''",
+      ),
+    );
+  }
+  if (additions.length) {
+    await db.batch(additions);
+  }
 }
 
 function toPublicPet(row: PetRow): PublicPet {
@@ -94,13 +125,27 @@ function toPublicPet(row: PetRow): PublicPet {
   };
 }
 
+function toModerationSubmission(row: PetRow): ModerationSubmission {
+  return {
+    ...toPublicPet(row),
+    status: row.status,
+    createdAt: row.created_at,
+    publishedAt: row.published_at,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+  };
+}
+
+const submissionColumns = `id, slug, name, description, author, license, status,
+  file_key, sha256, size_bytes, created_at, updated_at, published_at,
+  reviewed_at, review_note`;
+
 export async function listPublishedPets(): Promise<PublicPet[]> {
   const { db } = bindings();
   await ensureSchema(db);
   const result = await db
     .prepare(
-      `SELECT id, slug, name, description, author, license, status, file_key,
-        sha256, size_bytes, created_at, updated_at, published_at
+      `SELECT ${submissionColumns}
        FROM pet_submissions
        WHERE status = 'published'
        ORDER BY published_at DESC, updated_at DESC
@@ -123,8 +168,7 @@ async function publishedRow(publicId: string): Promise<PetRow> {
   await ensureSchema(db);
   const row = await db
     .prepare(
-      `SELECT id, slug, name, description, author, license, status, file_key,
-        sha256, size_bytes, created_at, updated_at, published_at
+      `SELECT ${submissionColumns}
        FROM pet_submissions
        WHERE id = ? AND status = 'published'
        LIMIT 1`,
@@ -135,6 +179,111 @@ async function publishedRow(publicId: string): Promise<PetRow> {
     throw new RegistryError("Published pet not found", 404);
   }
   return row;
+}
+
+async function submissionRow(publicId: string): Promise<PetRow> {
+  const { db } = bindings();
+  await ensureSchema(db);
+  const row = await db
+    .prepare(
+      `SELECT ${submissionColumns}
+       FROM pet_submissions
+       WHERE id = ?
+       LIMIT 1`,
+    )
+    .bind(safePublicId(publicId))
+    .first<PetRow>();
+  if (!row) {
+    throw new RegistryError("Submission not found", 404);
+  }
+  return row;
+}
+
+export async function listModerationSubmissions(): Promise<ModerationSubmission[]> {
+  const { db } = bindings();
+  await ensureSchema(db);
+  const result = await db
+    .prepare(
+      `SELECT ${submissionColumns}
+       FROM pet_submissions
+       ORDER BY
+         CASE status WHEN 'pending' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
+         updated_at DESC
+       LIMIT 250`,
+    )
+    .all<PetRow>();
+  return (result.results ?? []).map(toModerationSubmission);
+}
+
+export async function moderateSubmission(
+  publicId: string,
+  status: "published" | "rejected",
+  reviewNote = "",
+): Promise<ModerationSubmission> {
+  const id = safePublicId(publicId);
+  const { db } = bindings();
+  await ensureSchema(db);
+  const current = await submissionRow(id);
+  if (current.status !== "pending") {
+    throw new RegistryError("Only pending submissions can be reviewed", 409);
+  }
+  if (status === "published") {
+    const conflict = await db
+      .prepare(
+        "SELECT id FROM pet_submissions WHERE slug = ? AND status = 'published' AND id <> ? LIMIT 1",
+      )
+      .bind(current.slug, id)
+      .first<{ id: string }>();
+    if (conflict) {
+      throw new RegistryError(
+        `A published pet already uses the id ${current.slug}`,
+        409,
+      );
+    }
+  }
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE pet_submissions
+       SET status = ?, review_note = ?, reviewed_at = ?, updated_at = ?, published_at = ?
+       WHERE id = ? AND status = 'pending'`,
+    )
+    .bind(
+      status,
+      reviewNote.trim().slice(0, 500),
+      now,
+      now,
+      status === "published" ? now : null,
+      id,
+    )
+    .run();
+  return toModerationSubmission(await submissionRow(id));
+}
+
+export async function getModerationSprite(publicId: string) {
+  const row = await submissionRow(publicId);
+  return getSpriteForRow(row);
+}
+
+export async function getPublishedSprite(publicId: string) {
+  const row = await publishedRow(publicId);
+  return getSpriteForRow(row);
+}
+
+async function getSpriteForRow(row: PetRow) {
+  const { files } = bindings();
+  const object = await files.get(row.file_key);
+  if (!object) {
+    throw new RegistryError("Submission package is unavailable", 404);
+  }
+  let extracted: Record<string, Uint8Array>;
+  try {
+    extracted = unzipSync(new Uint8Array(await object.arrayBuffer()));
+  } catch {
+    throw new RegistryError("Submission package is not a valid ZIP archive");
+  }
+  const decoded = decodeManifest(extracted);
+  return { row, sprite: decoded.sprite };
 }
 
 export async function getPublishedPet(publicId: string) {
@@ -286,7 +435,7 @@ function decodeManifest(files: Record<string, Uint8Array>) {
       `Expected a ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT} atlas, got ${width}x${height}`,
     );
   }
-  return { manifest, name: displayName, slug: petKey };
+  return { manifest, name: displayName, slug: petKey, sprite: sheet };
 }
 
 async function sha256Hex(bytes: Uint8Array) {
