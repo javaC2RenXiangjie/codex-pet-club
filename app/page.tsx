@@ -18,6 +18,7 @@ type Pet = {
 };
 
 const categories: Category[] = ["全部", "像素", "软萌", "酷酷", "极简"];
+const skillRepositoryUrl = "https://github.com/javaC2RenXiangjie/codex-pet-club-skill";
 
 const pets: Pet[] = [
   {
@@ -149,6 +150,16 @@ export default function Home() {
     }
   }
 
+  async function copySkillPrompt() {
+    const prompt = `使用 $codex-pet-club，把桌宠库配置为 ${window.location.origin}，然后列出可以直接安装的桌宠。`;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      flash("Skill 使用提示已复制，粘贴给 Codex 即可");
+    } catch {
+      flash("请先下载 Skill，再让 Codex 配置当前站点");
+    }
+  }
+
   return (
     <main>
       <header className="site-header">
@@ -161,6 +172,7 @@ export default function Home() {
         </a>
         <nav aria-label="主导航">
           <a href="#catalog">逛桌宠</a>
+          <a href="#skill">官方 Skill</a>
           <a href="#how-it-works">使用说明</a>
           <button className="nav-submit" onClick={() => setShowSubmit(true)}>
             分享我的桌宠 <span aria-hidden="true">↗</span>
@@ -177,17 +189,17 @@ export default function Home() {
             再把你的版本分享回来。
           </p>
           <div className="hero-actions">
-            <a className="button button--primary" href="#catalog">
-              浏览全部桌宠 <span aria-hidden="true">↓</span>
+            <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
+              GitHub 获取 Skill <span aria-hidden="true">↗</span>
             </a>
-            <a className="text-link" href="/downloads/contributor-template.zip" download>
-              下载投稿模板 <span aria-hidden="true">↗</span>
+            <a className="text-link" href="#catalog">
+              先逛逛桌宠 <span aria-hidden="true">↓</span>
             </a>
           </div>
           <div className="trust-row" aria-label="社区数据">
             <span><strong>06</strong> 首发桌宠</span>
             <span><strong>100%</strong> 开放源文件</span>
-            <span><strong>0</strong> 登录门槛</span>
+            <span><strong>01</strong> 官方自动化 Skill</span>
           </div>
         </div>
 
@@ -245,6 +257,11 @@ export default function Home() {
           </label>
         </div>
 
+        <div className="catalog-notice">
+          <span>BETA</span>
+          当前卡片是创意源包；通过 v2 校验和审核的桌宠会出现“用 Skill 安装”标记，并支持一句话装进 Codex。
+        </div>
+
         {filteredPets.length > 0 ? (
           <div className="pet-grid">
             {filteredPets.map((pet, index) => (
@@ -287,17 +304,60 @@ export default function Home() {
         )}
       </section>
 
+      <section className="skill-section" id="skill">
+        <div className="skill-copy">
+          <div className="skill-badge"><span>OFFICIAL</span> SKILL · BETA</div>
+          <h2>以后不用再<br />手动搬文件。</h2>
+          <p>
+            安装一次 Codex Pet Club Skill，以后只要告诉 Codex 想领养哪只桌宠，
+            或者把本地哪只桌宠分享出去。下载、校验、备份、安装和投稿都由 Skill 完成。
+          </p>
+          <div className="skill-actions">
+            <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
+              GitHub 查看源码 <span aria-hidden="true">↗</span>
+            </a>
+            <a className="text-link" href="/downloads/codex-pet-club-skill.zip" download onClick={() => flash("官方 Skill 开始下载")}>直接下载 ZIP</a>
+            <button className="text-link" onClick={copySkillPrompt}>复制使用提示</button>
+          </div>
+          <small>上传默认进入审核队列；远端文件在安装前会自动验证 v2 清单、图集尺寸和校验和。</small>
+        </div>
+
+        <div className="skill-console" aria-label="Codex Pet Club Skill 使用示例">
+          <div className="console-title"><i /><i /><i /><span>Codex · Pet Club</span><b>CONNECTED</b></div>
+          <div className="chat-line chat-line--user">
+            <span>YOU</span>
+            <p>帮我安装桌宠库里的像素柯基</p>
+          </div>
+          <div className="chat-line chat-line--codex">
+            <span>CODEX</span>
+            <div>
+              <p>正在验证远端包…</p>
+              <code>✓ spriteVersionNumber: 2</code>
+              <code>✓ atlas: 1536 × 2288</code>
+              <code>✓ checksum matched</code>
+              <strong>已安装到你的 Codex 桌宠目录。</strong>
+            </div>
+          </div>
+          <div className="console-divider">OR PUBLISH YOUR OWN</div>
+          <div className="chat-line chat-line--user chat-line--compact">
+            <span>YOU</span>
+            <p>把我本地的机械小龙分享到桌宠库</p>
+          </div>
+          <div className="queue-status"><span>UPLOAD</span><b>已提交 · 等待审核</b><em>#PET-7F3A</em></div>
+        </div>
+      </section>
+
       <section className="how-section" id="how-it-works">
         <div className="how-intro">
           <span className="section-kicker">HOW IT WORKS / 002</span>
           <h2>下载后，<br />它就是你的了。</h2>
-          <p>所有桌宠都带清晰许可。保留署名、遵守许可，就可以自由改造和再次分享。</p>
+          <p>所有桌宠都带清晰许可。你可以直接拿源文件，也可以让官方 Skill 自动完成安装与投稿。</p>
         </div>
         <ol className="steps">
           <li><span>01</span><div><strong>挑喜欢的</strong><p>按风格筛选，先看性格和动作设定。</p></div></li>
-          <li><span>02</span><div><strong>拿走源文件</strong><p>不用登录，ZIP 源码包直接下载。</p></div></li>
-          <li><span>03</span><div><strong>改成你的版本</strong><p>换颜色、改配置，按包内说明继续创作。</p></div></li>
-          <li><span>04</span><div><strong>分享回来</strong><p>带上预览和许可，让更多人领养。</p></div></li>
+          <li><span>02</span><div><strong>让 Skill 安装</strong><p>自动下载、校验、备份旧版本，再装进 Codex。</p></div></li>
+          <li><span>03</span><div><strong>改成你的版本</strong><p>换颜色、改动作，Skill 会先验证本地 v2 包。</p></div></li>
+          <li><span>04</span><div><strong>一句话发布</strong><p>自动打包上传，审核通过后进入公共桌宠库。</p></div></li>
         </ol>
       </section>
 
@@ -306,10 +366,10 @@ export default function Home() {
         <div>
           <span className="section-kicker">COMMUNITY DROP</span>
           <h2>你的脑洞，<br />也值得被领养。</h2>
-          <p>把桌宠的源文件、预览和许可打包好，我们给它留一个最显眼的位置。</p>
+          <p>告诉 Codex“把我本地的桌宠分享出去”，Skill 会校验、打包并送入审核队列。</p>
         </div>
         <button className="button button--dark" onClick={() => setShowSubmit(true)}>
-          分享我的桌宠 <span aria-hidden="true">↗</span>
+          查看发布方式 <span aria-hidden="true">↗</span>
         </button>
       </section>
 
@@ -319,7 +379,7 @@ export default function Home() {
           <span><strong>Codex Pet Club</strong><small>桌宠开源俱乐部</small></span>
         </a>
         <p>给认真工作的人，一点可爱的陪伴。</p>
-        <div><a href="#catalog">桌宠目录</a><a href="#how-it-works">使用说明</a><button onClick={() => setShowSubmit(true)}>投稿</button></div>
+        <div><a href="#catalog">桌宠目录</a><a href={skillRepositoryUrl} target="_blank" rel="noreferrer">GitHub 源码</a><a href="#how-it-works">使用说明</a><button onClick={() => setShowSubmit(true)}>投稿</button></div>
       </footer>
 
       {showSubmit && (
@@ -332,15 +392,16 @@ export default function Home() {
             <p>准备好下面 5 样内容，就可以交给站点维护者收录：</p>
             <ul>
               <li>桌宠名称与一句话介绍</li>
-              <li>可编辑源文件压缩包</li>
+              <li>可编辑源文件，或已完成的 Codex v2 桌宠包</li>
               <li>透明背景预览图或 GIF</li>
               <li>明确的开源许可</li>
               <li>作者署名与链接</li>
             </ul>
-            <div className="modal-actions">
-              <a className="button button--primary" href="/downloads/contributor-template.zip" download onClick={() => flash("投稿模板开始下载")}>下载投稿模板</a>
-              <button className="text-link" onClick={copyChecklist}>复制投稿清单</button>
-            </div>
+                <div className="modal-actions">
+                  <a className="button button--primary" href="/downloads/codex-pet-club-skill.zip" download onClick={() => flash("官方 Skill 开始下载")}>用 Skill 自动发布</a>
+                  <button className="text-link" onClick={copyChecklist}>仍然手动投稿</button>
+                  <a className="text-link" href="/downloads/contributor-template.zip" download>下载手动模板</a>
+                </div>
           </section>
         </div>
       )}
