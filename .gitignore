@@ -40,3 +40,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
