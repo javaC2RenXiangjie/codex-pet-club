@@ -46,8 +46,9 @@ python -m unittest discover -s services/codex-pet-mail-service/tests -v
    原配置没有 `spring.mail`，设置 `MAIL_SMTP_CONFIG` 指向权限为 `640`、仅
    `root:codexpetmail` 可读的最小 JSON 配置；不要复制完整业务配置。
 4. 安装 `deploy/codex-pet-mail-service.service`，执行 daemon-reload 后启动服务。
-5. 测试环境使用 `MAIL_CONFIG_PROFILE=dev`；生产环境只在人工确认后改为 `prod`。
-6. 将 `deploy/nginx-location.conf` 加入已有 HTTPS 站点，配置检查通过后再 reload。
+5. 测试环境使用 `MAIL_CONFIG_PROFILE=dev`；生产环境按实际 SMTP 配置选择 profile。
+6. 将 `deploy/nginx-location.conf` 加入已有 HTTPS `server` 配置，检查通过后 reload。
+   当前 MVP 使用既有域名下的 `/codex-pet-mail` 路径，后续可无缝换成独立域名。
 
 生产切换时，Cloudflare Worker 仅保存 `MAIL_SERVICE_URL` 和 `MAIL_SERVICE_TOKEN` 两个
 Secret；SMTP 凭证始终留在邮件服务器。
