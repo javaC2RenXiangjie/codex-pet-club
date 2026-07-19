@@ -80,7 +80,8 @@ export default function SkillPage() {
           <h1>安装一次，<br />以后只要说一句话。</h1>
           <p>
             Codex Pet Club Skill 负责按唯一 ID 下载桌宠、验证 v2 图集和校验和、
-            备份旧文件；创作者还可以绑定账户 Key，让投稿自动归属自己。
+            备份旧文件；从 v0.4.2 起每次使用还会自动检查并安装官方最新版。
+            创作者也可以绑定账户 Key，让投稿自动归属自己。
           </p>
           <div className="skill-page-actions">
             <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
@@ -96,7 +97,7 @@ export default function SkillPage() {
           <code>{skillRepositoryUrl}</code>
           <div className="skill-terminal-result">
             <span>✓</span>
-            <div><strong>codex-pet-club</strong><small>已安装，可以连接桌宠库</small></div>
+            <div><strong>codex-pet-club v0.4.2</strong><small>已安装，后续使用会自动保持最新</small></div>
           </div>
         </div>
       </section>
@@ -129,6 +130,11 @@ export default function SkillPage() {
           <code>使用 $codex-pet-club，把桌宠库配置为 {registryOrigin}</code>
           <div><strong>接下来：</strong>返回桌宠库，打开桌宠详情并复制唯一 ID。</div>
         </div>
+      </section>
+
+      <section className="skill-safety-note">
+        <strong>以后需要手动更新吗？</strong>
+        <p>不需要。从 v0.4.2 起，每次调用都会先检查官方版本；发现新版后自动校验并替换 Skill。本次请求会停止，下一轮对话重试原来的话即可。升级不会保留旧 Skill 副本，也不会影响本机账户 Key、桌宠记录或备份。</p>
       </section>
 
       <section className="skill-safety-note">

@@ -40,6 +40,29 @@ test("keeps pet packages in Cloudflare R2 behind the Skill route", async () => {
   assert.doesNotMatch(route, /getStore|packagePath|registry\/packages/);
 });
 
+test("publishes the pinned automatic Skill update manifest", async () => {
+  const [releaseText, route, packageText] = await Promise.all([
+    readFile(new URL("../registry/skill-release.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/skill/version/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  const release = JSON.parse(releaseText);
+  const packageJson = JSON.parse(packageText);
+
+  assert.equal(release.schemaVersion, 1);
+  assert.equal(release.version, "0.4.2");
+  assert.equal(packageJson.version, release.version);
+  assert.equal(release.sizeBytes, 19103);
+  assert.match(release.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(
+    release.archiveUrl,
+    "https://github.com/javaC2RenXiangjie/codex-pet-club-skill/releases/download/v0.4.2/codex-pet-club-skill-v0.4.2.zip",
+  );
+  assert.match(route, /registry\/skill-release\.json/);
+  assert.match(route, /cache-control/);
+  assert.match(route, /no-store/);
+});
+
 test("serves previews through the Cloudflare asset binding without self-fetching", async () => {
   const route = await readFile(
     new URL("../app/api/pets/[id]/preview/route.ts", import.meta.url),
