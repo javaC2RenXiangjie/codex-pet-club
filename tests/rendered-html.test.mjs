@@ -103,25 +103,18 @@ test("declares registry storage and exposes the pet API", async () => {
     readFile(new URL("../app/api/pets/[id]/package/route.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.deepEqual(JSON.parse(hosting), { d1: "DB", r2: "PET_FILES" });
+  assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES" });
   assert.match(listRoute, /export async function GET/);
   assert.match(listRoute, /export async function POST/);
-  assert.match(detailRoute, /getPublishedPet/);
-  assert.match(packageRoute, /getPublishedPackage/);
+  assert.match(detailRoute, /findPublicPet/);
+  assert.match(packageRoute, /getPetRegistryBindings/);
   assert.match(packageRoute, /x-pet-key/);
   assert.match(packageRoute, /x-codex-pet-client/);
 });
 
-test("server-renders the moderation workspace", async () => {
+test("hides the moderation workspace from the public release", async () => {
   const response = await render("/admin");
-  assert.equal(response.status, 200);
-
-  const html = await response.text();
-  assert.match(html, /桌宠审核台/);
-  assert.match(html, /待审核/);
-  assert.match(html, /公网管理入口已关闭/);
-  assert.match(html, /审核队列/);
-  assert.match(html, /返回网站/);
+  assert.equal(response.status, 404);
 });
 
 test("exposes moderation list, decision, and sprite preview routes", async () => {
@@ -162,8 +155,8 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(decisionRoute, /export async function PATCH/);
   assert.match(decisionRoute, /moderateSubmission/);
   assert.match(spriteRoute, /image\/webp/);
-  assert.match(publicPreviewRoute, /getPublishedSprite/);
-  assert.match(publicPreviewRoute, /private, no-store/);
+  assert.match(publicPreviewRoute, /findPublicPet/);
+  assert.match(publicPreviewRoute, /public, max-age=86400, immutable/);
   assert.match(player, /setInterval/);
   assert.match(player, /backgroundPosition/);
   assert.match(player, /向右移动/);

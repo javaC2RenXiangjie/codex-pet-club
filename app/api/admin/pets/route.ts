@@ -2,10 +2,13 @@ import {
   listModerationSubmissions,
   RegistryError,
 } from "../../../../lib/pet-registry";
+import { localOnlyResponse } from "../../../../lib/local-only";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const blocked = localOnlyResponse(request);
+  if (blocked) return blocked;
   try {
     const submissions = await listModerationSubmissions();
     return Response.json(

@@ -2,6 +2,7 @@ import {
   moderateSubmission,
   RegistryError,
 } from "../../../../../lib/pet-registry";
+import { localOnlyResponse } from "../../../../../lib/local-only";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const blocked = localOnlyResponse(request);
+  if (blocked) return blocked;
   try {
     const body = (await request.json()) as {
       status?: unknown;

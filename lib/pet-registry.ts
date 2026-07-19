@@ -1,3 +1,7 @@
+import type {
+  D1Database,
+  D1PreparedStatement,
+} from "@cloudflare/workers-types";
 import { unzipSync } from "fflate";
 import { getPetRegistryBindings } from "./runtime-bindings";
 
@@ -55,7 +59,7 @@ export class RegistryError extends Error {
 
 function bindings() {
   const runtime = getPetRegistryBindings();
-  if (!runtime.DB || !runtime.PET_FILES) {
+  if (!runtime?.DB || !runtime.PET_FILES) {
     throw new RegistryError(
       "Pet registry storage is unavailable. Configure DB and PET_FILES bindings.",
       503,
@@ -439,7 +443,7 @@ function decodeManifest(files: Record<string, Uint8Array>) {
 }
 
 async function sha256Hex(bytes: Uint8Array) {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer);
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");

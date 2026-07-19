@@ -14,7 +14,7 @@ function getBrowserOrigin() {
 }
 
 function getServerOrigin() {
-  return "http://localhost:3001";
+  return "https://codex-pet-club.renxiangjie.workers.dev";
 }
 
 export default function SkillPage() {

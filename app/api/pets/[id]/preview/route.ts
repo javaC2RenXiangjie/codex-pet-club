@@ -1,31 +1,24 @@
-import {
-  getPublishedSprite,
-  RegistryError,
-} from "../../../../../lib/pet-registry";
-
-export const dynamic = "force-dynamic";
+import { findPublicPet } from "../../../../../lib/public-pet-catalog";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await context.params;
-    const { row, sprite } = await getPublishedSprite(id);
-    return new Response(sprite, {
-      headers: {
-        "content-type": "image/webp",
-        "cache-control": "private, no-store",
-        "content-disposition": "inline",
-        "x-content-type-options": "nosniff",
-        etag: `"${row.sha256}"`,
-      },
-    });
-  } catch (error) {
-    if (error instanceof RegistryError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    console.error(error);
-    return Response.json({ error: "Unexpected registry error" }, { status: 500 });
+  const { id } = await context.params;
+  const pet = findPublicPet(id);
+  if (!pet) return Response.json({ error: "Published pet not found" }, { status: 404 });
+
+  const asset = await fetch(new URL(pet.previewPath, request.url));
+  if (!asset.ok || !asset.body) {
+    return Response.json({ error: "Published pet preview is unavailable" }, { status: 404 });
   }
+  return new Response(asset.body, {
+    headers: {
+      "content-type": "image/webp",
+      "cache-control": "public, max-age=86400, immutable",
+      "content-disposition": "inline",
+      "x-content-type-options": "nosniff",
+      etag: `"${pet.sha256}"`,
+    },
+  });
 }

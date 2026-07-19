@@ -5,7 +5,6 @@ import { setPetRegistryBindings } from "../lib/runtime-bindings";
 
 interface Env {
   ASSETS: Fetcher;
-  DB: D1Database;
   PET_FILES: R2Bucket;
   IMAGES: {
     input(stream: ReadableStream): {

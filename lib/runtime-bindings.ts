@@ -1,3 +1,5 @@
+import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
+
 export type PetRegistryBindings = {
   DB?: D1Database;
   PET_FILES?: R2Bucket;
