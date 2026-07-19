@@ -1,15 +1,71 @@
-import { publicPets } from "../../../lib/public-pet-catalog";
+import {
+  createSubmission,
+  RegistryError,
+} from "../../../lib/pet-registry";
+import { listAllPublicPets } from "../../../lib/public-registry";
 
-export async function GET() {
-  return Response.json(
-    { pets: publicPets },
-    { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },
-  );
+export const dynamic = "force-dynamic";
+
+function registryError(error: unknown) {
+  if (error instanceof RegistryError) {
+    return Response.json(
+      { error: error.message },
+      { status: error.status, headers: { "cache-control": "private, no-store" } },
+    );
+  }
+  console.error(error);
+  return Response.json({ error: "Unexpected registry error" }, { status: 500 });
 }
 
-export async function POST() {
-  return Response.json(
-    { error: "Community submissions are not open in the first public release" },
-    { status: 403, headers: { "cache-control": "private, no-store" } },
-  );
+export async function GET() {
+  try {
+    return Response.json(
+      { pets: await listAllPublicPets() },
+      { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },
+    );
+  } catch (error) {
+    return registryError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data")) {
+    return Response.json(
+      { error: "Content-Type must be multipart/form-data" },
+      { status: 415 },
+    );
+  }
+  const declaredSize = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredSize) && declaredSize > 34 * 1024 * 1024) {
+    return Response.json({ error: "Upload body is too large" }, { status: 413 });
+  }
+
+  try {
+    const form = await request.formData();
+    const packageFile = form.get("package");
+    const metadataText = form.get("metadata");
+    if (!(packageFile instanceof File)) {
+      throw new RegistryError("package must be a ZIP file");
+    }
+    if (typeof metadataText !== "string") {
+      throw new RegistryError("metadata must be a JSON string");
+    }
+    const parsed = JSON.parse(metadataText) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new RegistryError("metadata must be a JSON object");
+    }
+    const submission = await createSubmission(
+      packageFile,
+      parsed as Record<string, unknown>,
+    );
+    return Response.json(
+      { submission },
+      { status: 202, headers: { "cache-control": "private, no-store" } },
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Response.json({ error: "metadata must be valid JSON" }, { status: 400 });
+    }
+    return registryError(error);
+  }
 }

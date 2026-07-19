@@ -60,18 +60,55 @@ function formatBytes(value: number) {
   return `${(value / 1024 / 1024).toFixed(2)} MiB`;
 }
 
-function SpritePreview({ submission }: { submission: Submission }) {
+function adminHeaders(token: string, json = false) {
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
+  if (json) headers["content-type"] = "application/json";
+  return headers;
+}
+
+function SpritePreview({ submission, token }: { submission: Submission; token: string }) {
   const [row, setRow] = useState<PetActionRow>(0);
+  const [spriteUrl, setSpriteUrl] = useState("");
   const action = PET_ACTIONS[row];
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    fetch(`/api/admin/pets/${submission.id}/spritesheet`, {
+      headers: adminHeaders(token),
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Sprite returned ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSpriteUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) setSpriteUrl("");
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [submission.id, token]);
 
   return (
     <div className="admin-sprite-stage" aria-label={`${submission.displayName} 动画图集预览`}>
-      <PetSpritePlayer
-        name={submission.displayName}
-        row={row}
-        size="admin"
-        src={`/api/admin/pets/${submission.id}/spritesheet`}
-      />
+      {spriteUrl ? (
+        <PetSpritePlayer
+          name={submission.displayName}
+          row={row}
+          size="admin"
+          src={spriteUrl}
+        />
+      ) : (
+        <div className="admin-sprite-loading">正在读取动画图集…</div>
+      )}
       <span className="admin-sprite-meta">正在播放：{action.label}</span>
       <div className="admin-motion-controls" aria-label="选择预览动作">
         {PET_ACTIONS.map((item) => (
@@ -90,9 +127,9 @@ function SpritePreview({ submission }: { submission: Submission }) {
   );
 }
 
-async function fetchSubmissions() {
+async function fetchSubmissions(token: string) {
   const response = await fetch("/api/admin/pets", {
-    headers: { accept: "application/json" },
+    headers: adminHeaders(token),
     cache: "no-store",
   });
   const data = (await response.json()) as {
@@ -106,7 +143,9 @@ async function fetchSubmissions() {
 export default function AdminPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<"all" | ReviewStatus>("pending");
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [state, setState] = useState<"auth" | "loading" | "ready" | "error">("auth");
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
   const [message, setMessage] = useState("");
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -115,31 +154,74 @@ export default function AdminPage() {
   async function loadSubmissions() {
     setState("loading");
     try {
-      setSubmissions(await fetchSubmissions());
+      setSubmissions(await fetchSubmissions(adminToken));
       setState("ready");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "审核队列加载失败");
-      setState("error");
+      const nextMessage = error instanceof Error ? error.message : "审核队列加载失败";
+      setMessage(nextMessage);
+      if (nextMessage === "Admin authentication required") {
+        sessionStorage.removeItem("codex-pet-club-admin-token");
+        setAdminToken("");
+        setState("auth");
+      } else {
+        setState("error");
+      }
     }
   }
 
   useEffect(() => {
     let active = true;
-    fetchSubmissions()
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+    const savedToken = sessionStorage.getItem("codex-pet-club-admin-token") ?? "";
+    if (!loopback && !savedToken) {
+      return () => {
+        active = false;
+      };
+    }
+    fetchSubmissions(savedToken)
       .then((items) => {
         if (!active) return;
+        setAdminToken(savedToken);
         setSubmissions(items);
         setState("ready");
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setMessage(error instanceof Error ? error.message : "审核队列加载失败");
-        setState("error");
+        const nextMessage = error instanceof Error ? error.message : "审核队列加载失败";
+        setMessage(nextMessage);
+        setState(nextMessage === "Admin authentication required" ? "auth" : "error");
       });
     return () => {
       active = false;
     };
   }, []);
+
+  async function signIn(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextToken = tokenInput.trim();
+    if (!nextToken) return;
+    setState("loading");
+    setMessage("");
+    try {
+      const items = await fetchSubmissions(nextToken);
+      sessionStorage.setItem("codex-pet-club-admin-token", nextToken);
+      setAdminToken(nextToken);
+      setTokenInput("");
+      setSubmissions(items);
+      setState("ready");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "管理员凭证验证失败");
+      setState("auth");
+    }
+  }
+
+  function signOut() {
+    sessionStorage.removeItem("codex-pet-club-admin-token");
+    setAdminToken("");
+    setSubmissions([]);
+    setState("auth");
+    setMessage("");
+  }
 
   const counts = useMemo(
     () => ({
@@ -170,7 +252,7 @@ export default function AdminPage() {
     try {
       const response = await fetch(`/api/admin/pets/${action.submission.id}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json", accept: "application/json" },
+        headers: adminHeaders(adminToken, true),
         body: JSON.stringify({ status: action.status, reviewNote }),
       });
       const data = (await response.json()) as {
@@ -214,8 +296,8 @@ export default function AdminPage() {
         </nav>
 
         <div className="admin-sidebar-note">
-          <strong>本地管理模式</strong>
-          <p>首个公网版本关闭管理路由；审核台仅在本机开发地址可用。</p>
+          <strong>安全审核模式</strong>
+          <p>管理数据与操作均需要管理员凭证；凭证只保存在当前浏览器会话。</p>
         </div>
       </aside>
 
@@ -226,15 +308,37 @@ export default function AdminPage() {
             <h1>桌宠审核台</h1>
           </div>
           <div className="admin-identity">
-            <span>LOCAL</span>
+            <span>{state === "auth" ? "LOCKED" : "ADMIN"}</span>
             <div>管</div>
           </div>
         </header>
 
         <div className="admin-security-banner" role="note">
-          <strong>✓ 公网管理入口已关闭</strong>
-          <span>当前审核台仅供本机使用；后续接入管理员认证后再对线上开放。</span>
+          <strong>✓ 管理接口已保护</strong>
+          <span>线上审核台使用单一管理员凭证；首版暂不引入账号和角色系统。</span>
         </div>
+
+        {state === "auth" ? (
+          <section className="admin-login" aria-labelledby="admin-login-title">
+            <span>PRIVATE WORKSPACE</span>
+            <h2 id="admin-login-title">进入桌宠审核台</h2>
+            <p>输入部署时配置的管理员凭证。它仅保存在当前标签页会话中。</p>
+            <form onSubmit={(event) => void signIn(event)}>
+              <label htmlFor="admin-token">管理员凭证</label>
+              <input
+                autoComplete="current-password"
+                id="admin-token"
+                onChange={(event) => setTokenInput(event.target.value)}
+                placeholder="输入管理员凭证"
+                type="password"
+                value={tokenInput}
+              />
+              <button disabled={!tokenInput.trim()} type="submit">验证并进入 ↗</button>
+            </form>
+            {message && <div className="admin-message" role="alert">{message}</div>}
+          </section>
+        ) : (
+          <>
 
         <section className="admin-stats" aria-label="审核统计">
           <article>
@@ -263,6 +367,9 @@ export default function AdminPage() {
             <button className="admin-refresh" onClick={() => void loadSubmissions()}>
               ↻ 刷新队列
             </button>
+            {adminToken && (
+              <button className="admin-refresh" onClick={signOut}>退出审核台</button>
+            )}
           </div>
 
           <div className="admin-filters" role="group" aria-label="审核状态筛选">
@@ -297,7 +404,7 @@ export default function AdminPage() {
                 data-testid={`review-card-${submission.id}`}
                 key={submission.id}
               >
-                <SpritePreview submission={submission} />
+                <SpritePreview submission={submission} token={adminToken} />
 
                 <div className="admin-review-content">
                   <div className="admin-review-title">
@@ -350,6 +457,8 @@ export default function AdminPage() {
             ))}
           </div>
         </section>
+          </>
+        )}
       </section>
 
       {action && (

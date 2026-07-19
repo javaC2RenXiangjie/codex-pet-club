@@ -235,9 +235,7 @@ export default function Home() {
         <nav aria-label="主导航">
           <a href="#catalog">桌宠库</a>
           <Link href="/skill">安装 Skill</Link>
-          <button className="nav-submit" disabled title="首个公网版本暂不开放社区投稿">
-            投稿内测中
-          </button>
+          <Link className="nav-submit" href="/skill#publish">分享我的桌宠 ↗</Link>
         </nav>
       </header>
 
@@ -369,11 +367,9 @@ export default function Home() {
         <div>
           <span className="section-kicker">PUBLISH YOUR PET</span>
           <h2>也想把自己的桌宠放进来？</h2>
-          <p>首个公网版本先把浏览和 Skill 安装做稳定。社区投稿将在后台保护与限流完成后开放。</p>
+          <p>让官方 Skill 校验并上传本地桌宠。投稿进入审核队列，通过后才会出现在公开桌宠库。</p>
         </div>
-        <button className="button button--dark" disabled>
-          投稿即将开放
-        </button>
+        <Link className="button button--dark" href="/skill#publish">查看投稿方式 ↗</Link>
       </section>
 
       <footer>
@@ -382,7 +378,7 @@ export default function Home() {
           <span><strong>Codex Pet Club</strong><small>桌宠开源俱乐部</small></span>
         </a>
         <p>给认真工作的人，一点可爱的陪伴。</p>
-        <div><a href="#catalog">桌宠目录</a><Link href="/skill">安装 Skill</Link><span>投稿内测中</span></div>
+        <div><a href="#catalog">桌宠目录</a><Link href="/skill">安装 Skill</Link><Link href="/skill#publish">投稿桌宠</Link></div>
       </footer>
 
       {selectedPet && (

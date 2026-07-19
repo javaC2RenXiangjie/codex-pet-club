@@ -144,8 +144,9 @@ export async function runSmoke({ baseUrl, catalog }) {
   const expectedPets = publishedPets(validateCatalog(catalog));
   await expectStatus(normalizedBaseUrl, "/", 200);
   await expectStatus(normalizedBaseUrl, "/skill", 200);
-  await expectStatus(normalizedBaseUrl, "/admin", 404);
-  await expectStatus(normalizedBaseUrl, "/api/pets", 403, { method: "POST" });
+  await expectStatus(normalizedBaseUrl, "/admin", 200);
+  await expectStatus(normalizedBaseUrl, "/api/admin/pets", 401);
+  await expectStatus(normalizedBaseUrl, "/api/pets", 415, { method: "POST" });
 
   const listResponse = await expectStatus(normalizedBaseUrl, "/api/pets", 200, {
     headers: { accept: "application/json" },

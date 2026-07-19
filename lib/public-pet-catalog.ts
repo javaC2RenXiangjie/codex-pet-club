@@ -93,3 +93,8 @@ export function findPublicPet(id: string) {
   const pet = catalog.pets.find((candidate) => candidate.id === id);
   return pet ? resolvePublishedPet(pet) : null;
 }
+
+export function findPublicPetByKey(petKey: string) {
+  const pet = catalog.pets.find((candidate) => candidate.petKey === petKey);
+  return pet ? resolvePublishedPet(pet) : null;
+}

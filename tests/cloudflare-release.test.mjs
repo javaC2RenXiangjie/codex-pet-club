@@ -51,7 +51,7 @@ test("serves previews through the Cloudflare asset binding without self-fetching
   assert.doesNotMatch(route, /await fetch\(new URL/);
 });
 
-test("declares the production R2 binding without D1", async () => {
+test("declares production R2 and D1 bindings", async () => {
   const [hosting, vite, worker, generatedWrangler] = await Promise.all([
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
@@ -59,14 +59,17 @@ test("declares the production R2 binding without D1", async () => {
     readFile(new URL("../dist/server/wrangler.json", import.meta.url), "utf8"),
   ]);
 
-  assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES" });
+  assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES", d1: "DB" });
   assert.match(vite, /workers_dev: true/);
   assert.match(vite, /binding: "PET_FILES"/);
   assert.match(vite, /assets:\s*{\s*binding: "ASSETS"/);
   assert.match(vite, /bucket_name: "codex-pet-club-packages"/);
+  assert.match(vite, /binding: "DB"/);
+  assert.match(vite, /database_name: "codex-pet-club-db"/);
   assert.match(worker, /PET_FILES: R2Bucket/);
-  assert.doesNotMatch(worker, /DB: D1Database/);
+  assert.match(worker, /DB: D1Database/);
   assert.equal(JSON.parse(generatedWrangler).assets.binding, "ASSETS");
+  assert.equal(JSON.parse(generatedWrangler).d1_databases[0].binding, "DB");
 });
 
 test("ships valid WebP previews for every public pet", async () => {
@@ -83,26 +86,31 @@ test("ships valid WebP previews for every public pet", async () => {
   }
 });
 
-test("keeps public uploads closed for the first release", async () => {
+test("accepts moderated Skill submissions", async () => {
   const route = await readFile(new URL("../app/api/pets/route.ts", import.meta.url), "utf8");
 
-  assert.match(route, /publicPets/);
+  assert.match(route, /listAllPublicPets/);
   assert.match(route, /export async function POST/);
-  assert.match(route, /Community submissions are not open in the first public release/);
-  assert.match(route, /status: 403/);
+  assert.match(route, /createSubmission/);
+  assert.match(route, /status: 202/);
+  assert.match(route, /multipart\/form-data/);
 });
 
-test("keeps moderation local-only", async () => {
-  const [layout, guard, adminList] = await Promise.all([
+test("protects online moderation with a Worker secret", async () => {
+  const [layout, guard, adminList, adminPage] = await Promise.all([
     readFile(new URL("../app/admin/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../lib/local-only.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/admin-auth.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/pets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /notFound\(\)/);
-  assert.match(layout, /host !== "localhost"/);
-  assert.match(guard, /status: 404/);
-  assert.match(adminList, /localOnlyResponse/);
+  assert.doesNotMatch(layout, /notFound\(\)/);
+  assert.match(guard, /ADMIN_TOKEN/);
+  assert.match(guard, /status: 401/);
+  assert.match(guard, /crypto\.subtle\.digest/);
+  assert.match(adminList, /adminOnlyResponse/);
+  assert.match(adminPage, /sessionStorage/);
+  assert.match(adminPage, /type="password"/);
 });
 
 test("has no seed endpoint or deploy-time secret in the final tree", async () => {

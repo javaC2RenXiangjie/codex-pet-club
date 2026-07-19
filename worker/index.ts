@@ -5,7 +5,9 @@ import { setPetRegistryBindings } from "../lib/runtime-bindings";
 
 interface Env {
   ASSETS: Fetcher;
+  DB: D1Database;
   PET_FILES: R2Bucket;
+  ADMIN_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -20,30 +22,6 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-function isLoopbackHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
-function firstLaunchGuard(request: Request, url: URL) {
-  if (isLoopbackHost(url.hostname)) return null;
-
-  if (url.pathname === "/admin" || url.pathname.startsWith("/api/admin/")) {
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "cache-control": "private, no-store" },
-    });
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/pets") {
-    return Response.json(
-      { error: "Community submissions are not open in the first public release" },
-      { status: 403, headers: { "cache-control": "private, no-store" } },
-    );
-  }
-
-  return null;
-}
-
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -54,8 +32,6 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     setPetRegistryBindings(env);
     const url = new URL(request.url);
-    const guardedResponse = firstLaunchGuard(request, url);
-    if (guardedResponse) return guardedResponse;
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
