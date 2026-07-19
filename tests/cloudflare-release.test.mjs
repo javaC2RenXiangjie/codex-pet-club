@@ -41,10 +41,11 @@ test("keeps pet packages in Cloudflare R2 behind the Skill route", async () => {
 });
 
 test("publishes the pinned automatic Skill update manifest", async () => {
-  const [releaseText, route, packageText] = await Promise.all([
+  const [releaseText, route, packageText, smoke] = await Promise.all([
     readFile(new URL("../registry/skill-release.json", import.meta.url), "utf8"),
     readFile(new URL("../app/api/skill/version/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/post-deploy-smoke.mjs", import.meta.url), "utf8"),
   ]);
   const release = JSON.parse(releaseText);
   const packageJson = JSON.parse(packageText);
@@ -61,6 +62,8 @@ test("publishes the pinned automatic Skill update manifest", async () => {
   assert.match(route, /registry\/skill-release\.json/);
   assert.match(route, /cache-control/);
   assert.match(route, /no-store/);
+  assert.match(smoke, /CODEX_PET_SMOKE_HAS_BODY/);
+  assert.match(smoke, /FromBase64String\(\$env:CODEX_PET_SMOKE_BODY\)/);
 });
 
 test("serves previews through the Cloudflare asset binding without self-fetching", async () => {
