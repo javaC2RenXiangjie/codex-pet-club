@@ -9,6 +9,9 @@ interface Env {
   DB: D1Database;
   PET_FILES: R2Bucket;
   ADMIN_TOKEN?: string;
+  AUTH_SECRET?: string;
+  MAIL_SERVICE_URL?: string;
+  MAIL_SERVICE_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {

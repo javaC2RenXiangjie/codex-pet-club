@@ -1,0 +1,22 @@
+[Unit]
+Description=Codex Pet Club verification mail service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codexpetmail
+Group=codexpetmail
+EnvironmentFile=/etc/codex-pet-mail-service.env
+WorkingDirectory=/opt/codex-pet-mail-service
+ExecStart=/usr/local/bin/python3 /opt/codex-pet-mail-service/app.py
+Restart=on-failure
+RestartSec=3
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

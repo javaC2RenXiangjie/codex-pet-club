@@ -1,6 +1,6 @@
 {
   "name": "codex-pet-club",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -11,10 +11,12 @@
     "deploy": "npm run deploy:raw && npm run smoke",
     "deploy:raw": "npm run build && wrangler deploy --config dist/server/wrangler.json",
     "smoke": "node scripts/post-deploy-smoke.mjs",
+    "smoke:auth": "node scripts/production-auth-smoke.mjs",
     "backup:drill": "python scripts/restore-backup-drill.py",
     "catalog:check": "node scripts/pet-release.mjs validate",
+    "mail-service:test": "node scripts/run-mail-service-tests.mjs",
     "start": "vinext start",
-    "test": "npm run catalog:check && npm run build && node --test tests/*.test.mjs",
+    "test": "npm run catalog:check && npm run mail-service:test && npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .edgeone --ignore-pattern .tef_dist",
     "db:generate": "drizzle-kit generate"
   },

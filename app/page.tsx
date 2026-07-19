@@ -235,6 +235,7 @@ export default function Home() {
         <nav aria-label="主导航">
           <a href="#catalog">桌宠库</a>
           <Link href="/skill">安装 Skill</Link>
+          <Link href="/account">创作者账户</Link>
           <Link className="nav-submit" href="/skill#publish">分享我的桌宠 ↗</Link>
         </nav>
       </header>
