@@ -15,7 +15,7 @@ const MAX_PENDING_SUBMISSIONS = 50;
 const SUBMISSION_RATE_LIMIT = 3;
 const SUBMISSION_RATE_WINDOW_MS = 60 * 60 * 1000;
 
-type SubmissionStatus = "pending" | "published" | "unpublished" | "rejected";
+export type SubmissionStatus = "pending" | "published" | "unpublished" | "rejected";
 export type ModerationAction =
   | "submitted"
   | "published"
@@ -61,6 +61,19 @@ export type ModerationSubmission = PublicPet & {
   reviewedAt: string | null;
   reviewNote: string;
   ownerUserId: string | null;
+};
+
+export type CreatorSubmission = Omit<ModerationSubmission, "ownerUserId"> & {
+  updatedAt: string;
+};
+
+export type CreatorSubmissionPage = {
+  submissions: CreatorSubmission[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  status: SubmissionStatus | null;
 };
 
 type ModerationEventRow = {
@@ -215,6 +228,18 @@ function toModerationSubmission(row: PetRow): ModerationSubmission {
   };
 }
 
+function toCreatorSubmission(row: PetRow): CreatorSubmission {
+  return {
+    ...toPublicPet(row),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publishedAt: row.published_at,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+  };
+}
+
 function toModerationEvent(row: ModerationEventRow): ModerationEvent {
   return {
     id: row.id,
@@ -333,6 +358,59 @@ export async function listModerationSubmissions(): Promise<ModerationSubmission[
     )
     .all<PetRow>();
   return (result.results ?? []).map(toModerationSubmission);
+}
+
+export async function listCreatorSubmissions(
+  ownerUserId: string,
+  {
+    status,
+    page = 1,
+    pageSize = 12,
+  }: {
+    status?: SubmissionStatus;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<CreatorSubmissionPage> {
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const safePage = Math.max(1, Math.floor(Number.isFinite(page) ? page : 1));
+  const safePageSize = Math.min(
+    50,
+    Math.max(1, Math.floor(Number.isFinite(pageSize) ? pageSize : 12)),
+  );
+  const conditions = ["owner_user_id = ?"];
+  const values: Array<string | number> = [ownerUserId];
+  if (status) {
+    conditions.push("status = ?");
+    values.push(status);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const count = await db
+    .prepare(`SELECT COUNT(*) AS count FROM pet_submissions ${where}`)
+    .bind(...values)
+    .first<{ count: number }>();
+  const total = Number(count?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const currentPage = Math.min(safePage, totalPages);
+  const result = await db
+    .prepare(
+      `SELECT ${submissionColumns}
+       FROM pet_submissions
+       ${where}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(...values, safePageSize, (currentPage - 1) * safePageSize)
+    .all<PetRow>();
+  return {
+    submissions: (result.results ?? []).map(toCreatorSubmission),
+    page: currentPage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+    status: status ?? null,
+  };
 }
 
 export async function queryModerationEvents({
@@ -497,19 +575,22 @@ export async function unpublishSubmission(
   return toModerationSubmission(await submissionRow(id));
 }
 
-export async function getSubmissionStatus(publicId: string) {
-  const row = await submissionRow(publicId);
-  return {
-    id: row.id,
-    petKey: row.slug,
-    displayName: row.name,
-    status: row.status,
-    sha256: row.sha256,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    reviewedAt: row.reviewed_at,
-    reviewNote: row.review_note,
-  };
+export async function getCreatorSubmission(publicId: string, ownerUserId: string) {
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const row = await db
+    .prepare(
+      `SELECT ${submissionColumns}
+       FROM pet_submissions
+       WHERE id = ? AND owner_user_id = ?
+       LIMIT 1`,
+    )
+    .bind(safePublicId(publicId), ownerUserId)
+    .first<PetRow>();
+  if (!row) {
+    throw new RegistryError("Submission not found", 404);
+  }
+  return toCreatorSubmission(row);
 }
 
 export async function getModerationSprite(publicId: string) {
@@ -858,8 +939,10 @@ export async function createSubmission(
   return {
     id,
     petKey: decoded.slug,
+    displayName: decoded.name,
     status: "pending" as const,
     sha256,
+    createdAt: now,
     statusPath: `/api/submissions/${id}`,
   };
 }
