@@ -80,7 +80,7 @@ export default function SkillPage() {
           <h1>安装一次，<br />以后只要说一句话。</h1>
           <p>
             Codex Pet Club Skill 负责按唯一 ID 下载桌宠、验证 v2 图集和校验和、
-            备份旧文件，并将桌宠安装到 Codex 的本地列表。
+            备份旧文件；创作者还可以绑定账户 Key，让投稿自动归属自己。
           </p>
           <div className="skill-page-actions">
             <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
@@ -144,11 +144,25 @@ export default function SkillPage() {
         <p>Skill 会验证桌宠清单、图集尺寸和校验和，并在覆盖已有桌宠前自动备份。网站只负责展示，不暴露桌宠包直链。</p>
       </section>
 
+      <section className="skill-command-section" id="bind-account">
+        <div className="skill-command-copy">
+          <span className="section-kicker">CREATOR KEY</span>
+          <h2>投稿前，只绑定一次身份</h2>
+          <p>在创作者账户页生成 Key 后，复制“绑定指令”交给 Codex。Skill 会先验证身份，只在本机保存 Key，之后投稿自动携带。</p>
+          <Link className="button button--dark" href="/account">进入创作者账户</Link>
+        </div>
+        <div className="skill-command-card">
+          <span>YOU → CODEX</span>
+          <code>使用 $codex-pet-club，把我的桌宠库 Key 配置为：你的 Key</code>
+          <div><strong>安全提示：</strong>Codex 只返回 Key 掩码；已撤销的 Key 不能重新绑定。</div>
+        </div>
+      </section>
+
       <section className="skill-command-section" id="publish">
         <div className="skill-command-copy">
           <span className="section-kicker">PUBLISH WITH CODEX</span>
           <h2>把本地桌宠交给 Skill 投稿</h2>
-          <p>把桌宠名称替换成你本地列表里的真实名称。Skill 会先验证和打包，再上传到审核队列；网页不提供手动上传入口。</p>
+          <p>先绑定创作者 Key，再把桌宠名称替换成你本地列表里的真实名称。Skill 会验证、打包并带着身份上传到审核队列；网页不提供手动上传入口。</p>
           <button className="button button--dark" onClick={copyPublishPrompt}>复制投稿指令</button>
         </div>
         <div className="skill-command-card">

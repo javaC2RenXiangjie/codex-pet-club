@@ -174,6 +174,18 @@ export default function AccountPage() {
     }
   }
 
+  async function copyBindPrompt() {
+    if (!newKey) return;
+    try {
+      await navigator.clipboard.writeText(
+        `使用 $codex-pet-club，把我的桌宠库 Key 配置为：${newKey.token}`,
+      );
+      setMessage("绑定指令已复制，直接发送给 Codex 即可。");
+    } catch {
+      setMessage("复制失败，请手动复制 Key 并交给 Codex");
+    }
+  }
+
   async function logout() {
     await jsonRequest<{ ok: true }>("/api/auth/session", { method: "DELETE" });
     setUser(null);
@@ -293,7 +305,7 @@ export default function AccountPage() {
             <h2>立即保存这个 Key</h2>
             <p>Key 只完整展示一次。关闭后无法再次查看完整内容；如果丢失，请撤销并重新生成。</p>
             <code>{newKey.token}</code>
-            <div><button onClick={copyKey} type="button">复制完整 Key</button><button className="account-link-button" onClick={() => setNewKey(null)} type="button">我已经保存</button></div>
+            <div><button onClick={copyBindPrompt} type="button">复制绑定指令</button><button className="account-link-button" onClick={copyKey} type="button">只复制 Key</button><button className="account-link-button" onClick={() => setNewKey(null)} type="button">我已经保存</button></div>
           </div>
         </div>
       )}

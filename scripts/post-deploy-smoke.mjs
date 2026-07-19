@@ -150,6 +150,11 @@ export async function runSmoke({ baseUrl, catalog }) {
   await expectStatus(normalizedBaseUrl, "/api/admin/events", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/health", 401);
   await expectStatus(normalizedBaseUrl, "/api/pets", 415, { method: "POST" });
+  await expectStatus(normalizedBaseUrl, "/api/pets", 401, {
+    method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=smoke" },
+    body: "--smoke--\r\n",
+  });
 
   const listResponse = await expectStatus(normalizedBaseUrl, "/api/pets", 200, {
     headers: { accept: "application/json" },

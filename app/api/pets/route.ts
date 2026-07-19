@@ -5,7 +5,7 @@ import {
 } from "../../../lib/pet-registry";
 import { listAllPublicPets } from "../../../lib/public-registry";
 import {
-  optionalApiKeyUser,
+  apiKeyUser,
   UserAuthError,
   userAuthErrorResponse,
 } from "../../../lib/user-auth";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const owner = await optionalApiKeyUser(request);
+    const owner = await apiKeyUser(request);
     await enforceSubmissionRateLimit(request);
     const form = await request.formData();
     const packageFile = form.get("package");
