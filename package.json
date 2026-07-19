@@ -11,6 +11,7 @@
     "deploy": "npm run deploy:raw && npm run smoke",
     "deploy:raw": "npm run build && wrangler deploy --config dist/server/wrangler.json",
     "smoke": "node scripts/post-deploy-smoke.mjs",
+    "smoke:auth": "node scripts/production-auth-smoke.mjs",
     "backup:drill": "python scripts/restore-backup-drill.py",
     "catalog:check": "node scripts/pet-release.mjs validate",
     "mail-service:test": "node scripts/run-mail-service-tests.mjs",

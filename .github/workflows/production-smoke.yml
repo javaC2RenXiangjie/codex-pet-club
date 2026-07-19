@@ -1,0 +1,32 @@
+name: Production Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify public catalog and Skill routes
+        run: npm run smoke
+
+      - name: Verify production email delivery
+        env:
+          CODEX_PET_SMOKE_EMAIL: ${{ secrets.CODEX_PET_SMOKE_EMAIL }}
+        run: node scripts/production-auth-smoke.mjs

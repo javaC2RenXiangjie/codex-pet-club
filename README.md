@@ -38,6 +38,7 @@ npm run dev
 npm run lint
 npm test
 npm run mail-service:test
+npm run smoke:auth
 npm run build
 npm run db:generate
 npm run backup:drill -- path/to/backup.json
@@ -46,6 +47,7 @@ npm run smoke
 ```
 
 `npm test` 会依次校验桌宠目录、执行生产构建并运行页面、API、迁移和备份恢复测试。
+GitHub Actions 的 `Production Smoke` 可从境外网络验证公开桌宠、Skill 下载保护和真实验证码邮件链路。
 
 ## 生产配置
 
