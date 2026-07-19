@@ -49,6 +49,8 @@ type RegistryBackup = {
   sha256: string;
   submissions: number;
   events: number;
+  users: number;
+  apiKeys: number;
 };
 
 type BackupVerification = {
@@ -57,6 +59,8 @@ type BackupVerification = {
   restorable: boolean;
   submissions: number;
   events: number;
+  users: number;
+  apiKeys: number;
 };
 
 type AuditPage = {
@@ -671,6 +675,8 @@ export default function AdminPage() {
                 <div><dt>最近备份</dt><dd>{formatDate(backups[0].createdAt)}</dd></div>
                 <div><dt>投稿记录</dt><dd>{backups[0].submissions}</dd></div>
                 <div><dt>操作记录</dt><dd>{backups[0].events}</dd></div>
+                <div><dt>创作者账户</dt><dd>{backups[0].users}</dd></div>
+                <div><dt>Skill Key</dt><dd>{backups[0].apiKeys}</dd></div>
                 <div><dt>文件大小</dt><dd>{formatBytes(backups[0].sizeBytes)}</dd></div>
               </dl>
             ) : (
@@ -679,7 +685,7 @@ export default function AdminPage() {
             {backupVerification && (
               <p className={backupVerification.restorable ? "admin-verify-ok" : "admin-verify-failed"}>
                 {backupVerification.restorable ? "✓ 恢复预检通过" : "! 恢复预检未通过"}
-                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.events} 条操作</small>
+                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.users} 个账户 · {backupVerification.apiKeys} 个 Key</small>
               </p>
             )}
           </article>

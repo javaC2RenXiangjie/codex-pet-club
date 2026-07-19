@@ -4,6 +4,9 @@ export type PetRegistryBindings = {
   DB?: D1Database;
   PET_FILES?: R2Bucket;
   ADMIN_TOKEN?: string;
+  AUTH_SECRET?: string;
+  SENDGRID_API_KEY?: string;
+  EMAIL_FROM?: string;
   ASSETS?: {
     fetch(request: Request): Promise<Response>;
   };

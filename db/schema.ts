@@ -21,6 +21,7 @@ export const petSubmissions = sqliteTable(
     publishedAt: text("published_at"),
     reviewedAt: text("reviewed_at"),
     reviewNote: text("review_note").notNull().default(""),
+    ownerUserId: text("owner_user_id"),
   },
   (table) => [
     uniqueIndex("pet_published_slug_unique")
@@ -46,6 +47,77 @@ export const moderationEvents = sqliteTable(
 );
 
 export const submissionRateLimits = sqliteTable("submission_rate_limits", {
+  fingerprint: text("fingerprint").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  attempts: integer("attempts").notNull().default(1),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull(),
+    emailVerifiedAt: text("email_verified_at").notNull(),
+    status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+);
+
+export const emailLoginCodes = sqliteTable(
+  "email_login_codes",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    consumedAt: text("consumed_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("email_login_codes_lookup_idx").on(table.email, table.createdAt)],
+);
+
+export const userSessions = sqliteTable(
+  "user_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at").notNull(),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("user_sessions_token_unique").on(table.tokenHash),
+    index("user_sessions_user_idx").on(table.userId),
+  ],
+);
+
+export const userApiKeys = sqliteTable(
+  "user_api_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("user_api_keys_prefix_unique").on(table.prefix),
+    uniqueIndex("user_api_keys_hash_unique").on(table.keyHash),
+    index("user_api_keys_user_idx").on(table.userId),
+  ],
+);
+
+export const authRateLimits = sqliteTable("auth_rate_limits", {
   fingerprint: text("fingerprint").primaryKey(),
   windowStart: integer("window_start").notNull(),
   attempts: integer("attempts").notNull().default(1),

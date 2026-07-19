@@ -68,6 +68,7 @@ export default function SkillPage() {
         </Link>
         <nav aria-label="Skill 页面导航">
           <Link href="/">桌宠库</Link>
+          <Link href="/account">创作者账户</Link>
           <a href={skillRepositoryUrl} target="_blank" rel="noreferrer">GitHub</a>
           <Link className="nav-submit" href="/">返回桌宠库</Link>
         </nav>

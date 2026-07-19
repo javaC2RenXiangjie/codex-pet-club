@@ -38,6 +38,7 @@ type PetRow = {
   published_at: string | null;
   reviewed_at: string | null;
   review_note: string;
+  owner_user_id: string | null;
 };
 
 export type PublicPet = {
@@ -59,6 +60,7 @@ export type ModerationSubmission = PublicPet & {
   publishedAt: string | null;
   reviewedAt: string | null;
   reviewNote: string;
+  ownerUserId: string | null;
 };
 
 type ModerationEventRow = {
@@ -131,7 +133,8 @@ export async function ensureRegistrySchema(db: D1Database) {
       updated_at TEXT NOT NULL,
       published_at TEXT,
       reviewed_at TEXT,
-      review_note TEXT NOT NULL DEFAULT ''
+      review_note TEXT NOT NULL DEFAULT '',
+      owner_user_id TEXT
     )`),
     db.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS pet_published_slug_unique ON pet_submissions(slug) WHERE status = 'published'",
@@ -174,9 +177,15 @@ export async function ensureRegistrySchema(db: D1Database) {
       ),
     );
   }
+  if (!names.has("owner_user_id")) {
+    additions.push(db.prepare("ALTER TABLE pet_submissions ADD COLUMN owner_user_id TEXT"));
+  }
   if (additions.length) {
     await db.batch(additions);
   }
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS pet_submissions_owner_idx ON pet_submissions(owner_user_id, created_at DESC)",
+  ).run();
 }
 
 function toPublicPet(row: PetRow): PublicPet {
@@ -202,6 +211,7 @@ function toModerationSubmission(row: PetRow): ModerationSubmission {
     publishedAt: row.published_at,
     reviewedAt: row.reviewed_at,
     reviewNote: row.review_note,
+    ownerUserId: row.owner_user_id,
   };
 }
 
@@ -243,7 +253,7 @@ function moderationEventStatement(
 
 const submissionColumns = `id, slug, name, description, author, license, status,
   file_key, sha256, size_bytes, created_at, updated_at, published_at,
-  reviewed_at, review_note`;
+  reviewed_at, review_note, owner_user_id`;
 
 export async function listPublishedPets(): Promise<PublicPet[]> {
   const { db } = bindings();
@@ -738,7 +748,11 @@ export async function enforceSubmissionRateLimit(request: Request) {
   }
 }
 
-export async function createSubmission(file: File, metadata: Record<string, unknown>) {
+export async function createSubmission(
+  file: File,
+  metadata: Record<string, unknown>,
+  owner?: { id: string; displayName: string } | null,
+) {
   if (file.size <= 0 || file.size > MAX_PACKAGE_BYTES) {
     throw new RegistryError("Package must be a ZIP no larger than 32 MiB");
   }
@@ -770,8 +784,9 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     typeof metadata.description === "string"
       ? metadata.description.trim().slice(0, 500)
       : "";
-  const author =
-    typeof metadata.author === "string" ? metadata.author.trim().slice(0, 120) : "";
+  const author = owner?.displayName ?? (
+    typeof metadata.author === "string" ? metadata.author.trim().slice(0, 120) : ""
+  );
   const license =
     typeof metadata.license === "string"
       ? metadata.license.trim().slice(0, 80) || "unspecified"
@@ -809,8 +824,8 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     const submission = db.prepare(
         `INSERT INTO pet_submissions (
           id, slug, name, description, author, license, status, file_key,
-          sha256, size_bytes, created_at, updated_at, published_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL)`,
+          sha256, size_bytes, created_at, updated_at, published_at, owner_user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL, ?)`,
       )
       .bind(
         id,
@@ -824,6 +839,7 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
         bytes.byteLength,
         now,
         now,
+        owner?.id ?? null,
       );
     await db.batch([
       submission,

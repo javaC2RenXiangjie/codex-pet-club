@@ -4,6 +4,11 @@ import {
   RegistryError,
 } from "../../../lib/pet-registry";
 import { listAllPublicPets } from "../../../lib/public-registry";
+import {
+  optionalApiKeyUser,
+  UserAuthError,
+  userAuthErrorResponse,
+} from "../../../lib/user-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +53,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const owner = await optionalApiKeyUser(request);
     await enforceSubmissionRateLimit(request);
     const form = await request.formData();
     const packageFile = form.get("package");
@@ -65,12 +71,14 @@ export async function POST(request: Request) {
     const submission = await createSubmission(
       packageFile,
       parsed as Record<string, unknown>,
+      owner,
     );
     return Response.json(
       { submission },
       { status: 202, headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
+    if (error instanceof UserAuthError) return userAuthErrorResponse(error);
     if (error instanceof SyntaxError) {
       return Response.json({ error: "metadata must be valid JSON" }, { status: 400 });
     }
