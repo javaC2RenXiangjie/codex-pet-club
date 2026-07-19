@@ -87,6 +87,8 @@ test("renders Skill installation on its own page", async () => {
   assert.match(html, /连接当前桌宠库/);
   assert.doesNotMatch(html, /codex-pet-club-skill\.zip/);
   assert.match(html, /github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
+  assert.match(html, /每次使用还会自动检查并安装官方最新版/);
+  assert.match(html, /不会保留旧 Skill 副本/);
   assert.match(html, /返回桌宠库/);
 });
 

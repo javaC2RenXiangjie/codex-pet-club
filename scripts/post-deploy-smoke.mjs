@@ -139,11 +139,38 @@ async function expectStatus(baseUrl, pathname, status, options) {
   return response;
 }
 
-export async function runSmoke({ baseUrl, catalog }) {
+export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   const expectedPets = publishedPets(validateCatalog(catalog));
   await expectStatus(normalizedBaseUrl, "/", 200);
   await expectStatus(normalizedBaseUrl, "/skill", 200);
+  let verifiedSkillVersion = null;
+  if (skillRelease) {
+    const manifestResponse = await expectStatus(normalizedBaseUrl, "/api/skill/version", 200, {
+      headers: { accept: "application/json" },
+    });
+    if (!/\bno-store\b/i.test(manifestResponse.headers.get("cache-control") ?? "")) {
+      fail("/api/skill/version must not cache a mutable release manifest");
+    }
+    const liveRelease = await manifestResponse.json();
+    for (const field of ["schemaVersion", "version", "archiveUrl", "sha256", "sizeBytes", "publishedAt"]) {
+      if (liveRelease[field] !== skillRelease[field]) {
+        fail(`/api/skill/version returned stale ${field}`);
+      }
+    }
+    const releaseResponse = await expectStatus(normalizedBaseUrl, liveRelease.archiveUrl, 200, {
+      headers: { accept: "application/zip, application/octet-stream" },
+    });
+    const releaseBytes = Buffer.from(await releaseResponse.arrayBuffer());
+    if (releaseBytes.length !== liveRelease.sizeBytes) {
+      fail("Skill release size does not match /api/skill/version");
+    }
+    const releaseSha256 = createHash("sha256").update(releaseBytes).digest("hex");
+    if (releaseSha256 !== liveRelease.sha256) {
+      fail("Skill release checksum does not match /api/skill/version");
+    }
+    verifiedSkillVersion = liveRelease.version;
+  }
   await expectStatus(normalizedBaseUrl, "/admin", 200);
   await expectStatus(normalizedBaseUrl, "/api/admin/pets", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/backups", 401);
@@ -207,6 +234,7 @@ export async function runSmoke({ baseUrl, catalog }) {
 
   return {
     baseUrl: normalizedBaseUrl,
+    skillVersion: verifiedSkillVersion,
     livePets: list.pets.length,
     pets: expectedPets.map((pet) => ({
       id: pet.id,
@@ -222,10 +250,11 @@ async function main() {
     ? process.argv[baseUrlIndex + 1]
     : process.env.CODEX_PET_CLUB_API || defaultBaseUrl;
   if (!baseUrl) fail("--base-url requires a value");
-  const catalog = JSON.parse(
-    await readFile(path.join(projectRoot, "registry", "catalog.json"), "utf8"),
-  );
-  const result = await runSmoke({ baseUrl, catalog });
+  const [catalog, skillRelease] = await Promise.all([
+    readFile(path.join(projectRoot, "registry", "catalog.json"), "utf8").then(JSON.parse),
+    readFile(path.join(projectRoot, "registry", "skill-release.json"), "utf8").then(JSON.parse),
+  ]);
+  const result = await runSmoke({ baseUrl, catalog, skillRelease });
   process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);
 }
 
