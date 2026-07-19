@@ -15,6 +15,7 @@ type RegistryPet = {
   description: string;
   author: string;
   license: string;
+  version: string;
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
@@ -137,6 +138,7 @@ function RegistryPetDetail({
             <div><dt>作者</dt><dd>{pet.author || "Community"}</dd></div>
             <div><dt>许可证</dt><dd>{pet.license}</dd></div>
             <div><dt>桌宠标识</dt><dd>{pet.petKey}</dd></div>
+            <div><dt>当前版本</dt><dd>v{pet.version}</dd></div>
             <div><dt>文件校验</dt><dd>{pet.sha256.slice(0, 16)}…</dd></div>
           </dl>
 
@@ -342,6 +344,7 @@ export default function Home() {
                     <div className="tag-row">
                       <span>{pet.license}</span>
                       <span>{pet.petKey}</span>
+                      <span>v{pet.version}</span>
                     </div>
                     <div className="pet-list-footer">
                       <span>by {pet.author || "Community"}</span>

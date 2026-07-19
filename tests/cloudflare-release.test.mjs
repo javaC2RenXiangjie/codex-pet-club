@@ -3,16 +3,21 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("publishes the two approved pets with stable IDs and checksums", async () => {
-  const catalog = await readFile(new URL("../lib/public-pet-catalog.ts", import.meta.url), "utf8");
+  const catalog = JSON.parse(
+    await readFile(new URL("../registry/catalog.json", import.meta.url), "utf8"),
+  );
 
-  assert.match(catalog, /063e4124-91e3-440d-9f3b-40034565a54f/);
-  assert.match(catalog, /e9029e8c-de60-4f0b-bf79-81156c978126/);
-  assert.match(catalog, /displayName: "凤喜 3D"/);
-  assert.match(catalog, /displayName: "凤喜"/);
-  assert.match(catalog, /8ce62b254f873e1b7c7969b5cbde36340e52a54796406af0ec27c3090059944b/);
-  assert.match(catalog, /99f2aa0000b3577c813259afe98716309dbcf597a7096bdaa59b0266b066e810/);
-  assert.match(catalog, /packageKey: "packages\/fengxi-3d\.zip"/);
-  assert.match(catalog, /packageKey: "packages\/fengxi\.zip"/);
+  assert.equal(catalog.schemaVersion, 1);
+  assert.equal(catalog.pets.length, 2);
+  assert.deepEqual(
+    catalog.pets.map((pet) => [pet.id, pet.displayName, pet.status, pet.activeVersion]),
+    [
+      ["063e4124-91e3-440d-9f3b-40034565a54f", "凤喜 3D", "published", "1.0.0"],
+      ["e9029e8c-de60-4f0b-bf79-81156c978126", "凤喜", "published", "1.0.0"],
+    ],
+  );
+  assert.equal(catalog.pets[0].releases[0].sha256, "8ce62b254f873e1b7c7969b5cbde36340e52a54796406af0ec27c3090059944b");
+  assert.equal(catalog.pets[1].releases[0].sha256, "99f2aa0000b3577c813259afe98716309dbcf597a7096bdaa59b0266b066e810");
 });
 
 test("keeps pet packages in Cloudflare R2 behind the Skill route", async () => {
@@ -31,6 +36,7 @@ test("keeps pet packages in Cloudflare R2 behind the Skill route", async () => {
   assert.match(route, /request\.headers\.get\("x-codex-pet-client"\) !== "skill-v1"/);
   assert.match(route, /x-pet-sha256/);
   assert.match(route, /x-pet-key/);
+  assert.match(route, /x-pet-version/);
   assert.doesNotMatch(route, /getStore|packagePath|registry\/packages/);
 });
 

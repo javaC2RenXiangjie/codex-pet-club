@@ -32,6 +32,7 @@ export async function GET(
       etag: `"${pet.sha256}"`,
       "x-pet-sha256": pet.sha256,
       "x-pet-key": pet.petKey,
+      "x-pet-version": pet.version,
     },
   });
 }
