@@ -10,6 +10,9 @@ const localBindingConfig = {
   compatibility_flags: ["nodejs_compat"],
   workers_dev: true,
   preview_urls: false,
+  triggers: {
+    crons: ["0 3 * * *"],
+  },
   assets: {
     binding: "ASSETS",
   },

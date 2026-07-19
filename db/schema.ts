@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const petSubmissions = sqliteTable(
   "pet_submissions",
@@ -10,7 +10,7 @@ export const petSubmissions = sqliteTable(
     description: text("description").notNull().default(""),
     author: text("author").notNull().default(""),
     license: text("license").notNull().default("unspecified"),
-    status: text("status", { enum: ["pending", "published", "rejected"] })
+    status: text("status", { enum: ["pending", "published", "unpublished", "rejected"] })
       .notNull()
       .default("pending"),
     fileKey: text("file_key").notNull(),
@@ -28,3 +28,26 @@ export const petSubmissions = sqliteTable(
       .where(sql`${table.status} = 'published'`),
   ],
 );
+
+export const moderationEvents = sqliteTable(
+  "moderation_events",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id").notNull(),
+    petKey: text("pet_key").notNull(),
+    displayName: text("display_name").notNull(),
+    action: text("action", {
+      enum: ["submitted", "published", "rejected", "unpublished"],
+    }).notNull(),
+    note: text("note").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("moderation_events_created_idx").on(table.createdAt)],
+);
+
+export const submissionRateLimits = sqliteTable("submission_rate_limits", {
+  fingerprint: text("fingerprint").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  attempts: integer("attempts").notNull().default(1),
+  updatedAt: text("updated_at").notNull(),
+});

@@ -153,7 +153,12 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(adminPage, /data-testid={`review-card-/);
   assert.match(adminPage, /通过并公开/);
   assert.match(adminPage, /拒绝投稿/);
+  assert.match(adminPage, /下架桌宠/);
+  assert.match(adminPage, /最近操作/);
+  assert.match(adminPage, /立即备份/);
   assert.match(listRoute, /listModerationSubmissions/);
+  assert.match(listRoute, /listModerationEvents/);
+  assert.match(listRoute, /listRegistryBackups/);
   assert.match(decisionRoute, /export async function PATCH/);
   assert.match(decisionRoute, /moderateSubmission/);
   assert.match(spriteRoute, /image\/webp/);
@@ -165,6 +170,7 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(player, /审核/);
   assert.match(registry, /Only pending submissions can be reviewed/);
   assert.match(registry, /A published pet already uses the id/);
+  assert.match(registry, /Only published submissions can be unpublished/);
   assert.match(schema, /reviewNote/);
   assert.match(schema, /reviewedAt/);
 });

@@ -12,6 +12,11 @@ const EXPECTED_WIDTH = 1536;
 const EXPECTED_HEIGHT = 2288;
 const COMMUNITY_VERSION = "1.0.0";
 const MAX_PENDING_SUBMISSIONS = 50;
+const SUBMISSION_RATE_LIMIT = 3;
+const SUBMISSION_RATE_WINDOW_MS = 60 * 60 * 1000;
+
+type SubmissionStatus = "pending" | "published" | "unpublished" | "rejected";
+type ModerationAction = "submitted" | "published" | "rejected" | "unpublished";
 
 type PetRow = {
   id: string;
@@ -20,7 +25,7 @@ type PetRow = {
   description: string;
   author: string;
   license: string;
-  status: "pending" | "published" | "rejected";
+  status: SubmissionStatus;
   file_key: string;
   sha256: string;
   size_bytes: number;
@@ -52,10 +57,31 @@ export type ModerationSubmission = PublicPet & {
   reviewNote: string;
 };
 
+type ModerationEventRow = {
+  id: string;
+  submission_id: string;
+  pet_key: string;
+  display_name: string;
+  action: ModerationAction;
+  note: string;
+  created_at: string;
+};
+
+export type ModerationEvent = {
+  id: string;
+  submissionId: string;
+  petKey: string;
+  displayName: string;
+  action: ModerationAction;
+  note: string;
+  createdAt: string;
+};
+
 export class RegistryError extends Error {
   constructor(
     message: string,
     readonly status = 400,
+    readonly headers?: Record<string, string>,
   ) {
     super(message);
   }
@@ -69,10 +95,14 @@ function bindings() {
       503,
     );
   }
-  return { db: runtime.DB, files: runtime.PET_FILES };
+  return {
+    db: runtime.DB,
+    files: runtime.PET_FILES,
+    adminToken: runtime.ADMIN_TOKEN?.trim() || "development-rate-limit",
+  };
 }
 
-async function ensureSchema(db: D1Database) {
+export async function ensureRegistrySchema(db: D1Database) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS pet_submissions (
       id TEXT PRIMARY KEY,
@@ -81,7 +111,7 @@ async function ensureSchema(db: D1Database) {
       description TEXT NOT NULL DEFAULT '',
       author TEXT NOT NULL DEFAULT '',
       license TEXT NOT NULL DEFAULT 'unspecified',
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'published', 'rejected')),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'published', 'unpublished', 'rejected')),
       file_key TEXT NOT NULL,
       sha256 TEXT NOT NULL,
       size_bytes INTEGER NOT NULL,
@@ -97,6 +127,24 @@ async function ensureSchema(db: D1Database) {
     db.prepare(
       "CREATE INDEX IF NOT EXISTS pet_status_updated_idx ON pet_submissions(status, updated_at DESC)",
     ),
+    db.prepare(`CREATE TABLE IF NOT EXISTS moderation_events (
+      id TEXT PRIMARY KEY,
+      submission_id TEXT NOT NULL,
+      pet_key TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN ('submitted', 'published', 'rejected', 'unpublished')),
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(
+      "CREATE INDEX IF NOT EXISTS moderation_events_created_idx ON moderation_events(created_at DESC)",
+    ),
+    db.prepare(`CREATE TABLE IF NOT EXISTS submission_rate_limits (
+      fingerprint TEXT PRIMARY KEY,
+      window_start INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    )`),
   ]);
 
   const columns = await db
@@ -145,13 +193,49 @@ function toModerationSubmission(row: PetRow): ModerationSubmission {
   };
 }
 
+function toModerationEvent(row: ModerationEventRow): ModerationEvent {
+  return {
+    id: row.id,
+    submissionId: row.submission_id,
+    petKey: row.pet_key,
+    displayName: row.display_name,
+    action: row.action,
+    note: row.note,
+    createdAt: row.created_at,
+  };
+}
+
+function moderationEventStatement(
+  db: D1Database,
+  row: Pick<PetRow, "id" | "slug" | "name">,
+  action: ModerationAction,
+  note: string,
+  createdAt: string,
+) {
+  return db
+    .prepare(
+      `INSERT INTO moderation_events (
+        id, submission_id, pet_key, display_name, action, note, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      row.id,
+      row.slug,
+      row.name,
+      action,
+      note.trim().slice(0, 500),
+      createdAt,
+    );
+}
+
 const submissionColumns = `id, slug, name, description, author, license, status,
   file_key, sha256, size_bytes, created_at, updated_at, published_at,
   reviewed_at, review_note`;
 
 export async function listPublishedPets(): Promise<PublicPet[]> {
   const { db } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   const result = await db
     .prepare(
       `SELECT ${submissionColumns}
@@ -174,7 +258,7 @@ function safePublicId(value: string) {
 
 async function publishedRow(publicId: string): Promise<PetRow> {
   const { db } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   const row = await db
     .prepare(
       `SELECT ${submissionColumns}
@@ -192,7 +276,7 @@ async function publishedRow(publicId: string): Promise<PetRow> {
 
 async function submissionRow(publicId: string): Promise<PetRow> {
   const { db } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   const row = await db
     .prepare(
       `SELECT ${submissionColumns}
@@ -210,18 +294,37 @@ async function submissionRow(publicId: string): Promise<PetRow> {
 
 export async function listModerationSubmissions(): Promise<ModerationSubmission[]> {
   const { db } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   const result = await db
     .prepare(
       `SELECT ${submissionColumns}
        FROM pet_submissions
        ORDER BY
-         CASE status WHEN 'pending' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
+         CASE status
+           WHEN 'pending' THEN 0
+           WHEN 'published' THEN 1
+           WHEN 'unpublished' THEN 2
+           ELSE 3
+         END,
          updated_at DESC
        LIMIT 250`,
     )
     .all<PetRow>();
   return (result.results ?? []).map(toModerationSubmission);
+}
+
+export async function listModerationEvents(): Promise<ModerationEvent[]> {
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const result = await db
+    .prepare(
+      `SELECT id, submission_id, pet_key, display_name, action, note, created_at
+       FROM moderation_events
+       ORDER BY created_at DESC
+       LIMIT 100`,
+    )
+    .all<ModerationEventRow>();
+  return (result.results ?? []).map(toModerationEvent);
 }
 
 export async function moderateSubmission(
@@ -231,7 +334,7 @@ export async function moderateSubmission(
 ): Promise<ModerationSubmission> {
   const id = safePublicId(publicId);
   const { db, files } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   const current = await submissionRow(id);
   if (current.status !== "pending") {
     throw new RegistryError("Only pending submissions can be reviewed", 409);
@@ -275,8 +378,8 @@ export async function moderateSubmission(
     });
   }
   try {
-    await db
-      .prepare(
+    await db.batch([
+      db.prepare(
         `UPDATE pet_submissions
          SET status = ?, file_key = ?, review_note = ?, reviewed_at = ?, updated_at = ?, published_at = ?
          WHERE id = ? AND status = 'pending'`,
@@ -289,8 +392,9 @@ export async function moderateSubmission(
         now,
         status === "published" ? now : null,
         id,
-      )
-      .run();
+      ),
+      moderationEventStatement(db, current, status, reviewNote, now),
+    ]);
   } catch (error) {
     if (publishedKey) await files.delete(publishedKey);
     throw error;
@@ -298,6 +402,31 @@ export async function moderateSubmission(
   if (publishedKey && publishedKey !== current.file_key) {
     await files.delete(current.file_key);
   }
+  return toModerationSubmission(await submissionRow(id));
+}
+
+export async function unpublishSubmission(
+  publicId: string,
+  reviewNote = "",
+): Promise<ModerationSubmission> {
+  const id = safePublicId(publicId);
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const current = await submissionRow(id);
+  if (current.status !== "published") {
+    throw new RegistryError("Only published submissions can be unpublished", 409);
+  }
+  const now = new Date().toISOString();
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE pet_submissions
+         SET status = 'unpublished', review_note = ?, reviewed_at = ?, updated_at = ?
+         WHERE id = ? AND status = 'published'`,
+      )
+      .bind(reviewNote.trim().slice(0, 500), now, now, id),
+    moderationEventStatement(db, current, "unpublished", reviewNote, now),
+  ]);
   return toModerationSubmission(await submissionRow(id));
 }
 
@@ -501,6 +630,57 @@ async function sha256Hex(bytes: Uint8Array) {
     .join("");
 }
 
+export async function enforceSubmissionRateLimit(request: Request) {
+  const hostname = new URL(request.url).hostname.toLowerCase();
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") {
+    return;
+  }
+
+  const { db, adminToken } = bindings();
+  await ensureRegistrySchema(db);
+  const identity = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
+  const fingerprint = await sha256Hex(
+    new TextEncoder().encode(`${adminToken}:submission-rate-v1:${identity}`),
+  );
+  const now = Date.now();
+  const cutoff = now - SUBMISSION_RATE_WINDOW_MS;
+  const updatedAt = new Date(now).toISOString();
+  await db
+    .prepare(
+      `INSERT INTO submission_rate_limits (fingerprint, window_start, attempts, updated_at)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT(fingerprint) DO UPDATE SET
+         attempts = CASE
+           WHEN submission_rate_limits.window_start <= ? THEN 1
+           ELSE submission_rate_limits.attempts + 1
+         END,
+         window_start = CASE
+           WHEN submission_rate_limits.window_start <= ? THEN excluded.window_start
+           ELSE submission_rate_limits.window_start
+         END,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(fingerprint, now, updatedAt, cutoff, cutoff)
+    .run();
+  const quota = await db
+    .prepare(
+      "SELECT window_start, attempts FROM submission_rate_limits WHERE fingerprint = ? LIMIT 1",
+    )
+    .bind(fingerprint)
+    .first<{ window_start: number; attempts: number }>();
+  if (quota && quota.attempts > SUBMISSION_RATE_LIMIT) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((quota.window_start + SUBMISSION_RATE_WINDOW_MS - now) / 1000),
+    );
+    throw new RegistryError(
+      "Upload rate limit exceeded. Try again later.",
+      429,
+      { "retry-after": String(retryAfter) },
+    );
+  }
+}
+
 export async function createSubmission(file: File, metadata: Record<string, unknown>) {
   if (file.size <= 0 || file.size > MAX_PACKAGE_BYTES) {
     throw new RegistryError("Package must be a ZIP no larger than 32 MiB");
@@ -540,19 +720,21 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
       ? metadata.license.trim().slice(0, 80) || "unspecified"
       : "unspecified";
   const { db, files } = bindings();
-  await ensureSchema(db);
+  await ensureRegistrySchema(db);
   if (findPublicPetByKey(decoded.slug)) {
     throw new RegistryError(`The official catalog already uses the pet key ${decoded.slug}`, 409);
   }
   const duplicate = await db
     .prepare(
-      "SELECT id FROM pet_submissions WHERE slug = ? AND status IN ('pending', 'published') LIMIT 1",
+      `SELECT id FROM pet_submissions
+       WHERE (slug = ? OR sha256 = ?) AND status IN ('pending', 'published')
+       LIMIT 1`,
     )
-    .bind(decoded.slug)
+    .bind(decoded.slug, sha256)
     .first<{ id: string }>();
   if (duplicate) {
     throw new RegistryError(
-      `A pending or published submission already uses the pet key ${decoded.slug}`,
+      "A pending or published submission already uses this pet key or package checksum",
       409,
     );
   }
@@ -567,8 +749,7 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     customMetadata: { sha256, slug: decoded.slug, status: "pending" },
   });
   try {
-    await db
-      .prepare(
+    const submission = db.prepare(
         `INSERT INTO pet_submissions (
           id, slug, name, description, author, license, status, file_key,
           sha256, size_bytes, created_at, updated_at, published_at
@@ -586,8 +767,17 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
         bytes.byteLength,
         now,
         now,
-      )
-      .run();
+      );
+    await db.batch([
+      submission,
+      moderationEventStatement(
+        db,
+        { id, slug: decoded.slug, name: decoded.name },
+        "submitted",
+        "",
+        now,
+      ),
+    ]);
   } catch (error) {
     await files.delete(fileKey);
     throw error;

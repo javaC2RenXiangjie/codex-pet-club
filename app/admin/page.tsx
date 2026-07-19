@@ -8,7 +8,7 @@ import {
   type PetActionRow,
 } from "../components/pet-sprite-player";
 
-type ReviewStatus = "pending" | "published" | "rejected";
+type ReviewStatus = "pending" | "published" | "unpublished" | "rejected";
 
 type Submission = {
   id: string;
@@ -29,12 +29,38 @@ type Submission = {
 
 type ReviewAction = {
   submission: Submission;
-  status: "published" | "rejected";
+  status: "published" | "unpublished" | "rejected";
+};
+
+type ModerationEvent = {
+  id: string;
+  submissionId: string;
+  petKey: string;
+  displayName: string;
+  action: "submitted" | "published" | "unpublished" | "rejected";
+  note: string;
+  createdAt: string;
+};
+
+type RegistryBackup = {
+  key: string;
+  createdAt: string;
+  sizeBytes: number;
+  sha256: string;
+  submissions: number;
+  events: number;
+};
+
+type AdminOverview = {
+  submissions: Submission[];
+  events: ModerationEvent[];
+  backups: RegistryBackup[];
 };
 
 const filters: Array<{ value: "all" | ReviewStatus; label: string }> = [
   { value: "pending", label: "待审核" },
   { value: "published", label: "已通过" },
+  { value: "unpublished", label: "已下架" },
   { value: "rejected", label: "已拒绝" },
   { value: "all", label: "全部" },
 ];
@@ -42,7 +68,15 @@ const filters: Array<{ value: "all" | ReviewStatus; label: string }> = [
 const statusLabel: Record<ReviewStatus, string> = {
   pending: "待审核",
   published: "已公开",
+  unpublished: "已下架",
   rejected: "已拒绝",
+};
+
+const eventLabel: Record<ModerationEvent["action"], string> = {
+  submitted: "提交投稿",
+  published: "审核通过",
+  unpublished: "下架桌宠",
+  rejected: "拒绝投稿",
 };
 
 function formatDate(value: string | null) {
@@ -127,21 +161,29 @@ function SpritePreview({ submission, token }: { submission: Submission; token: s
   );
 }
 
-async function fetchSubmissions(token: string) {
+async function fetchOverview(token: string): Promise<AdminOverview> {
   const response = await fetch("/api/admin/pets", {
     headers: adminHeaders(token),
     cache: "no-store",
   });
   const data = (await response.json()) as {
     submissions?: Submission[];
+    events?: ModerationEvent[];
+    backups?: RegistryBackup[];
     error?: string;
   };
   if (!response.ok) throw new Error(data.error || "审核队列加载失败");
-  return Array.isArray(data.submissions) ? data.submissions : [];
+  return {
+    submissions: Array.isArray(data.submissions) ? data.submissions : [],
+    events: Array.isArray(data.events) ? data.events : [],
+    backups: Array.isArray(data.backups) ? data.backups : [],
+  };
 }
 
 export default function AdminPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [events, setEvents] = useState<ModerationEvent[]>([]);
+  const [backups, setBackups] = useState<RegistryBackup[]>([]);
   const [filter, setFilter] = useState<"all" | ReviewStatus>("pending");
   const [state, setState] = useState<"auth" | "loading" | "ready" | "error">("auth");
   const [adminToken, setAdminToken] = useState("");
@@ -150,11 +192,18 @@ export default function AdminPage() {
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
 
-  async function loadSubmissions() {
+  function applyOverview(overview: AdminOverview) {
+    setSubmissions(overview.submissions);
+    setEvents(overview.events);
+    setBackups(overview.backups);
+  }
+
+  async function loadOverview() {
     setState("loading");
     try {
-      setSubmissions(await fetchSubmissions(adminToken));
+      applyOverview(await fetchOverview(adminToken));
       setState("ready");
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : "审核队列加载失败";
@@ -178,11 +227,11 @@ export default function AdminPage() {
         active = false;
       };
     }
-    fetchSubmissions(savedToken)
-      .then((items) => {
+    fetchOverview(savedToken)
+      .then((overview) => {
         if (!active) return;
         setAdminToken(savedToken);
-        setSubmissions(items);
+        applyOverview(overview);
         setState("ready");
       })
       .catch((error: unknown) => {
@@ -203,11 +252,11 @@ export default function AdminPage() {
     setState("loading");
     setMessage("");
     try {
-      const items = await fetchSubmissions(nextToken);
+      const overview = await fetchOverview(nextToken);
       sessionStorage.setItem("codex-pet-club-admin-token", nextToken);
       setAdminToken(nextToken);
       setTokenInput("");
-      setSubmissions(items);
+      applyOverview(overview);
       setState("ready");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "管理员凭证验证失败");
@@ -219,6 +268,8 @@ export default function AdminPage() {
     sessionStorage.removeItem("codex-pet-club-admin-token");
     setAdminToken("");
     setSubmissions([]);
+    setEvents([]);
+    setBackups([]);
     setState("auth");
     setMessage("");
   }
@@ -227,6 +278,7 @@ export default function AdminPage() {
     () => ({
       pending: submissions.filter((item) => item.status === "pending").length,
       published: submissions.filter((item) => item.status === "published").length,
+      unpublished: submissions.filter((item) => item.status === "unpublished").length,
       rejected: submissions.filter((item) => item.status === "rejected").length,
     }),
     [submissions],
@@ -243,6 +295,30 @@ export default function AdminPage() {
   function openReview(submission: Submission, status: ReviewAction["status"]) {
     setReviewNote("");
     setAction({ submission, status });
+  }
+
+  async function createBackup() {
+    setBackingUp(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/backups", {
+        method: "POST",
+        headers: adminHeaders(adminToken),
+      });
+      const data = (await response.json()) as {
+        backup?: RegistryBackup;
+        error?: string;
+      };
+      if (!response.ok || !data.backup) {
+        throw new Error(data.error || "备份创建失败");
+      }
+      setBackups((items) => [data.backup as RegistryBackup, ...items].slice(0, 20));
+      setMessage("D1 元数据备份已写入 R2");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "备份创建失败");
+    } finally {
+      setBackingUp(false);
+    }
   }
 
   async function submitReview() {
@@ -268,8 +344,22 @@ export default function AdminPage() {
       setMessage(
         action.status === "published"
           ? `${action.submission.displayName} 已通过并进入公开桌宠库`
-          : `${action.submission.displayName} 已拒绝`,
+          : action.status === "unpublished"
+            ? `${action.submission.displayName} 已从公开桌宠库下架`
+            : `${action.submission.displayName} 已拒绝`,
       );
+      setEvents((items) => [
+        {
+          id: `optimistic-${Date.now()}`,
+          submissionId: action.submission.id,
+          petKey: action.submission.petKey,
+          displayName: action.submission.displayName,
+          action: action.status,
+          note: reviewNote,
+          createdAt: new Date().toISOString(),
+        },
+        ...items,
+      ]);
       setAction(null);
       setReviewNote("");
     } catch (error) {
@@ -292,6 +382,7 @@ export default function AdminPage() {
 
         <nav aria-label="管理导航">
           <a className="active" href="#queue"><span>◉</span>审核队列</a>
+          <a href="#operations"><span>↺</span>操作与备份</a>
           <Link href="/"><span>↗</span>返回网站</Link>
         </nav>
 
@@ -352,9 +443,54 @@ export default function AdminPage() {
             <small>网站可见</small>
           </article>
           <article>
+            <span>已下架</span>
+            <strong>{counts.unpublished.toString().padStart(2, "0")}</strong>
+            <small>停止安装</small>
+          </article>
+          <article>
             <span>已拒绝</span>
             <strong>{counts.rejected.toString().padStart(2, "0")}</strong>
             <small>保留记录</small>
+          </article>
+        </section>
+
+        <section className="admin-operations" id="operations">
+          <article>
+            <div className="admin-operations-heading">
+              <div><span>BACKUP</span><h2>数据备份</h2></div>
+              <button disabled={backingUp} onClick={() => void createBackup()}>
+                {backingUp ? "备份中…" : "立即备份"}
+              </button>
+            </div>
+            {backups[0] ? (
+              <dl>
+                <div><dt>最近备份</dt><dd>{formatDate(backups[0].createdAt)}</dd></div>
+                <div><dt>投稿记录</dt><dd>{backups[0].submissions}</dd></div>
+                <div><dt>操作记录</dt><dd>{backups[0].events}</dd></div>
+                <div><dt>文件大小</dt><dd>{formatBytes(backups[0].sizeBytes)}</dd></div>
+              </dl>
+            ) : (
+              <p>尚无备份。系统每天 03:00 UTC 自动执行，也可以现在手动创建。</p>
+            )}
+          </article>
+
+          <article>
+            <div className="admin-operations-heading">
+              <div><span>AUDIT LOG</span><h2>最近操作</h2></div>
+            </div>
+            {events.length ? (
+              <ol className="admin-event-list">
+                {events.slice(0, 6).map((event) => (
+                  <li key={event.id}>
+                    <span className={`admin-event-dot admin-event-dot--${event.action}`} />
+                    <div><strong>{eventLabel[event.action]} · {event.displayName}</strong><small>{event.note || event.petKey}</small></div>
+                    <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>审核操作会从第一条新投稿开始记录。</p>
+            )}
           </article>
         </section>
 
@@ -364,12 +500,14 @@ export default function AdminPage() {
               <span>REVIEW QUEUE</span>
               <h2>桌宠投稿</h2>
             </div>
-            <button className="admin-refresh" onClick={() => void loadSubmissions()}>
-              ↻ 刷新队列
-            </button>
-            {adminToken && (
-              <button className="admin-refresh" onClick={signOut}>退出审核台</button>
-            )}
+            <div className="admin-queue-tools">
+              <button className="admin-refresh" onClick={() => void loadOverview()}>
+                ↻ 刷新队列
+              </button>
+              {adminToken && (
+                <button className="admin-refresh" onClick={signOut}>退出审核台</button>
+              )}
+            </div>
           </div>
 
           <div className="admin-filters" role="group" aria-label="审核状态筛选">
@@ -452,6 +590,17 @@ export default function AdminPage() {
                       </button>
                     </div>
                   )}
+                  {submission.status === "published" && (
+                    <div className="admin-review-actions">
+                      <button
+                        className="admin-reject"
+                        data-testid={`unpublish-${submission.id}`}
+                        onClick={() => openReview(submission, "unpublished")}
+                      >
+                        下架桌宠
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -466,22 +615,24 @@ export default function AdminPage() {
           <section className="admin-review-modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
             <button className="admin-modal-close" aria-label="关闭审核窗口" onClick={() => setAction(null)}>×</button>
             <span className={action.status === "published" ? "approve" : "reject"}>
-              {action.status === "published" ? "✓" : "×"}
+              {action.status === "published" ? "✓" : action.status === "unpublished" ? "↓" : "×"}
             </span>
             <p>FINAL CHECK</p>
             <h2 id="review-title">
-              {action.status === "published" ? "确认通过" : "确认拒绝"}“{action.submission.displayName}”
+              {action.status === "published" ? "确认通过" : action.status === "unpublished" ? "确认下架" : "确认拒绝"}“{action.submission.displayName}”
             </h2>
             <p>
               {action.status === "published"
                 ? "通过后，它会立即出现在公开目录中，用户可凭提交 ID 通过 Skill 安装。"
-                : "拒绝后，它不会进入公开目录，但会保留提交记录和审核备注。"}
+                : action.status === "unpublished"
+                  ? "下架后，它会立即从公开目录消失并停止新的 Skill 安装；包和操作记录仍会保留。"
+                  : "拒绝后，它不会进入公开目录，但会保留提交记录和审核备注。"}
             </p>
             <label htmlFor="review-note">审核备注（可选）</label>
             <textarea
               id="review-note"
               maxLength={500}
-              placeholder={action.status === "published" ? "例如：图集、授权与内容检查通过" : "填写拒绝原因，方便后续追踪"}
+              placeholder={action.status === "published" ? "例如：图集、授权与内容检查通过" : action.status === "unpublished" ? "填写下架原因，方便后续追踪" : "填写拒绝原因，方便后续追踪"}
               value={reviewNote}
               onChange={(event) => setReviewNote(event.target.value)}
             />
@@ -493,7 +644,7 @@ export default function AdminPage() {
                 disabled={processing}
                 onClick={() => void submitReview()}
               >
-                {processing ? "处理中…" : action.status === "published" ? "确认通过并公开" : "确认拒绝"}
+                {processing ? "处理中…" : action.status === "published" ? "确认通过并公开" : action.status === "unpublished" ? "确认下架" : "确认拒绝"}
               </button>
             </div>
           </section>
