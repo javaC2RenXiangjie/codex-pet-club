@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,60 @@ import { validateCatalog } from "./pet-release.mjs";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://codex-pet-club.renxiangjie.workers.dev";
 const userAgent = "Codex-Pet-Club-Release-Smoke/1.0";
+
+const powershellRequestScript = String.raw`
+$ErrorActionPreference = 'Stop'
+$requestHeaders = @{}
+$headerJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:CODEX_PET_SMOKE_HEADERS))
+$headerObject = ConvertFrom-Json $headerJson
+$requestUserAgent = $null
+foreach ($property in $headerObject.PSObject.Properties) {
+  if ($property.Name -ieq 'user-agent') {
+    $requestUserAgent = [string]$property.Value
+  } else {
+    $requestHeaders[$property.Name] = [string]$property.Value
+  }
+}
+$requestParameters = @{
+  UseBasicParsing = $true
+  Uri = $env:CODEX_PET_SMOKE_URL
+  Method = $env:CODEX_PET_SMOKE_METHOD
+  Headers = $requestHeaders
+  TimeoutSec = 60
+  ErrorAction = 'Stop'
+}
+if ($requestUserAgent) { $requestParameters.UserAgent = $requestUserAgent }
+$responseHeaders = @{}
+try {
+  $response = Invoke-WebRequest @requestParameters
+  $statusCode = [int]$response.StatusCode
+  foreach ($key in $response.Headers.Keys) { $responseHeaders[$key] = [string]$response.Headers[$key] }
+  if ($response.RawContentStream) {
+    if ($response.RawContentStream.CanSeek) { $response.RawContentStream.Position = 0 }
+    $memory = New-Object IO.MemoryStream
+    $response.RawContentStream.CopyTo($memory)
+    $bodyBytes = $memory.ToArray()
+  } elseif ($response.Content -is [byte[]]) {
+    $bodyBytes = $response.Content
+  } else {
+    $bodyBytes = [Text.Encoding]::UTF8.GetBytes([string]$response.Content)
+  }
+} catch {
+  $response = $_.Exception.Response
+  if (-not $response) { throw }
+  $statusCode = [int]$response.StatusCode
+  foreach ($key in $response.Headers.Keys) { $responseHeaders[$key] = [string]$response.Headers[$key] }
+  $stream = $response.GetResponseStream()
+  $memory = New-Object IO.MemoryStream
+  if ($stream) { $stream.CopyTo($memory) }
+  $bodyBytes = $memory.ToArray()
+}
+@{
+  status = $statusCode
+  headers = $responseHeaders
+  bodyBase64 = [Convert]::ToBase64String($bodyBytes)
+} | ConvertTo-Json -Compress -Depth 5
+`;
 
 function fail(message) {
   throw new Error(message);
@@ -25,14 +80,54 @@ function publishedPets(catalog) {
 }
 
 async function request(baseUrl, pathname, options = {}) {
-  return fetch(new URL(pathname, `${baseUrl}/`), {
-    ...options,
-    headers: {
-      "user-agent": userAgent,
-      ...(options.headers ?? {}),
-    },
-    signal: AbortSignal.timeout(options.timeout ?? 60_000),
-  });
+  const target = new URL(pathname, `${baseUrl}/`);
+  const { timeout = 60_000, ...requestOptions } = options;
+  if (process.platform === "win32" && !new Set(["localhost", "127.0.0.1", "::1"]).has(target.hostname)) {
+    const requestHeaders = Object.fromEntries(
+      new Headers({ "user-agent": userAgent, ...(requestOptions.headers ?? {}) }).entries(),
+    );
+    const result = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", powershellRequestScript],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CODEX_PET_SMOKE_URL: target.href,
+          CODEX_PET_SMOKE_METHOD: requestOptions.method ?? "GET",
+          CODEX_PET_SMOKE_HEADERS: Buffer.from(JSON.stringify(requestHeaders)).toString("base64"),
+        },
+        maxBuffer: 64 * 1024 * 1024,
+        windowsHide: true,
+      },
+    );
+    if (result.error || result.status !== 0) {
+      fail(`${pathname} PowerShell request failed: ${result.error?.message ?? result.stderr.trim()}`);
+    }
+    const payload = JSON.parse(result.stdout.trim());
+    const body = Buffer.from(payload.bodyBase64, "base64");
+    return {
+      status: payload.status,
+      headers: new Headers(payload.headers ?? {}),
+      json: async () => JSON.parse(body.toString("utf8")),
+      text: async () => body.toString("utf8"),
+      arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      body: { cancel: async () => {} },
+    };
+  }
+  try {
+    return await fetch(target, {
+      ...requestOptions,
+      headers: {
+        "user-agent": userAgent,
+        ...(requestOptions.headers ?? {}),
+      },
+      signal: AbortSignal.timeout(timeout),
+    });
+  } catch (error) {
+    const cause = error.cause?.code ? ` (${error.cause.code})` : "";
+    fail(`${pathname} request failed${cause}: ${error.cause?.message ?? error.message}`);
+  }
 }
 
 async function expectStatus(baseUrl, pathname, status, options) {

@@ -40,6 +40,17 @@ test("keeps pet packages in Cloudflare R2 behind the Skill route", async () => {
   assert.doesNotMatch(route, /getStore|packagePath|registry\/packages/);
 });
 
+test("serves previews through the Cloudflare asset binding without self-fetching", async () => {
+  const route = await readFile(
+    new URL("../app/api/pets/[id]/preview/route.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(route, /getPetRegistryBindings\(\)\?\.ASSETS/);
+  assert.match(route, /assets\.fetch/);
+  assert.doesNotMatch(route, /await fetch\(new URL/);
+});
+
 test("declares the production R2 binding without D1", async () => {
   const [hosting, vite, worker] = await Promise.all([
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
