@@ -179,6 +179,6 @@ test("keeps the catalog and Skill installation as separate pages", async () => {
   assert.match(catalogPage, /data-testid="pet-detail-modal"/);
   assert.match(catalogPage, /href="\/skill"/);
   assert.doesNotMatch(catalogPage, /codex-pet-club-skill\.zip/);
-  assert.match(skillPage, /codex-pet-club-skill\.zip/);
+  assert.doesNotMatch(skillPage, /codex-pet-club-skill\.zip/);
   assert.match(skillPage, /codex-pet-club-skill/);
 });
