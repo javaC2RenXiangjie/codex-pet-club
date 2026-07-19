@@ -16,7 +16,11 @@ const SUBMISSION_RATE_LIMIT = 3;
 const SUBMISSION_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 type SubmissionStatus = "pending" | "published" | "unpublished" | "rejected";
-type ModerationAction = "submitted" | "published" | "rejected" | "unpublished";
+export type ModerationAction =
+  | "submitted"
+  | "published"
+  | "rejected"
+  | "unpublished";
 
 type PetRow = {
   id: string;
@@ -75,6 +79,14 @@ export type ModerationEvent = {
   action: ModerationAction;
   note: string;
   createdAt: string;
+};
+
+export type ModerationEventPage = {
+  events: ModerationEvent[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export class RegistryError extends Error {
@@ -313,18 +325,63 @@ export async function listModerationSubmissions(): Promise<ModerationSubmission[
   return (result.results ?? []).map(toModerationSubmission);
 }
 
-export async function listModerationEvents(): Promise<ModerationEvent[]> {
+export async function queryModerationEvents({
+  action,
+  query = "",
+  page = 1,
+  pageSize = 6,
+}: {
+  action?: ModerationAction;
+  query?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<ModerationEventPage> {
   const { db } = bindings();
   await ensureRegistrySchema(db);
+  const safePage = Math.max(1, Math.floor(Number.isFinite(page) ? page : 1));
+  const safePageSize = Math.min(
+    25,
+    Math.max(1, Math.floor(Number.isFinite(pageSize) ? pageSize : 6)),
+  );
+  const safeQuery = query.trim().slice(0, 80);
+  const conditions: string[] = [];
+  const values: string[] = [];
+  if (action) {
+    conditions.push("action = ?");
+    values.push(action);
+  }
+  if (safeQuery) {
+    conditions.push(
+      "(display_name LIKE ? COLLATE NOCASE OR pet_key LIKE ? COLLATE NOCASE OR note LIKE ? COLLATE NOCASE)",
+    );
+    const pattern = `%${safeQuery}%`;
+    values.push(pattern, pattern, pattern);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const count = await db
+    .prepare(`SELECT COUNT(*) AS count FROM moderation_events ${where}`)
+    .bind(...values)
+    .first<{ count: number }>();
+  const total = Number(count?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const currentPage = Math.min(safePage, totalPages);
   const result = await db
     .prepare(
       `SELECT id, submission_id, pet_key, display_name, action, note, created_at
        FROM moderation_events
-       ORDER BY created_at DESC
-       LIMIT 100`,
+       ${where}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
     )
+    .bind(...values, safePageSize, (currentPage - 1) * safePageSize)
     .all<ModerationEventRow>();
-  return (result.results ?? []).map(toModerationEvent);
+  return {
+    events: (result.results ?? []).map(toModerationEvent),
+    page: currentPage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function moderateSubmission(
