@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const projectRoot = new URL("../", import.meta.url);
@@ -47,12 +47,11 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
 });
 
 test("ships only the official Skill and removes direct pet downloads", async () => {
-  const [page, skillPage, layout, packageJson, downloads] = await Promise.all([
+  const [page, skillPage, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/skill/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(new URL("../public/downloads/", import.meta.url)),
   ]);
 
   assert.match(page, /type RegistryPet/);
@@ -63,7 +62,7 @@ test("ships only the official Skill and removes direct pet downloads", async () 
   assert.doesNotMatch(page, /OFFICIAL CODEX SKILL/);
   assert.match(page, /href="\/skill"/);
   assert.match(page, /navigator\.clipboard\.writeText/);
-  assert.match(skillPage, /codex-pet-club-skill\.zip/);
+  assert.doesNotMatch(skillPage, /codex-pet-club-skill\.zip/);
   assert.match(skillPage, /https:\/\/github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
   assert.match(skillPage, /OFFICIAL CODEX SKILL/);
   assert.match(skillPage, /copyInstallPrompt/);
@@ -73,13 +72,7 @@ test("ships only the official Skill and removes direct pet downloads", async () 
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 
-  assert.deepEqual(downloads.sort(), ["codex-pet-club-skill.zip"]);
-
-  for (const name of downloads) {
-    const bytes = await readFile(new URL(`../public/downloads/${name}`, import.meta.url));
-    assert.equal(bytes.subarray(0, 2).toString("ascii"), "PK", `${name} is not a ZIP archive`);
-  }
-
+  await assert.rejects(access(new URL("../public/downloads/codex-pet-club-skill.zip", import.meta.url)));
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url)));
   await assert.rejects(access(new URL("public/_sites-preview", projectRoot)));
 });
@@ -92,7 +85,8 @@ test("renders Skill installation on its own page", async () => {
   assert.match(html, /安装一次/);
   assert.match(html, /从安装到领养/);
   assert.match(html, /连接当前桌宠库/);
-  assert.match(html, /codex-pet-club-skill\.zip/);
+  assert.doesNotMatch(html, /codex-pet-club-skill\.zip/);
+  assert.match(html, /github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
   assert.match(html, /返回桌宠库/);
 });
 

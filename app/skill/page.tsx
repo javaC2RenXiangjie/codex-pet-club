@@ -87,14 +87,6 @@ export default function SkillPage() {
               GitHub 获取 Skill <span aria-hidden="true">↗</span>
             </a>
             <button className="text-link" onClick={copyInstallPrompt}>复制安装指令</button>
-            <a
-              className="text-link"
-              download
-              href="/downloads/codex-pet-club-skill.zip"
-              onClick={() => flash("官方 Skill 开始下载")}
-            >
-              下载 ZIP
-            </a>
           </div>
         </div>
 
