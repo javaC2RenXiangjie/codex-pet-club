@@ -10,6 +10,9 @@ const localBindingConfig = {
   compatibility_flags: ["nodejs_compat"],
   workers_dev: true,
   preview_urls: false,
+  assets: {
+    binding: "ASSETS",
+  },
   r2_buckets: [
     {
       binding: "PET_FILES",

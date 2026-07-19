@@ -52,18 +52,21 @@ test("serves previews through the Cloudflare asset binding without self-fetching
 });
 
 test("declares the production R2 binding without D1", async () => {
-  const [hosting, vite, worker] = await Promise.all([
+  const [hosting, vite, worker, generatedWrangler] = await Promise.all([
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../dist/server/wrangler.json", import.meta.url), "utf8"),
   ]);
 
   assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES" });
   assert.match(vite, /workers_dev: true/);
   assert.match(vite, /binding: "PET_FILES"/);
+  assert.match(vite, /assets:\s*{\s*binding: "ASSETS"/);
   assert.match(vite, /bucket_name: "codex-pet-club-packages"/);
   assert.match(worker, /PET_FILES: R2Bucket/);
   assert.doesNotMatch(worker, /DB: D1Database/);
+  assert.equal(JSON.parse(generatedWrangler).assets.binding, "ASSETS");
 });
 
 test("ships valid WebP previews for every public pet", async () => {
