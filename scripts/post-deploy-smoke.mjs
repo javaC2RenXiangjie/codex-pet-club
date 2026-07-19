@@ -33,6 +33,9 @@ $requestParameters = @{
   ErrorAction = 'Stop'
 }
 if ($requestUserAgent) { $requestParameters.UserAgent = $requestUserAgent }
+if ($env:CODEX_PET_SMOKE_HAS_BODY -eq '1') {
+  $requestParameters.Body = [Convert]::FromBase64String($env:CODEX_PET_SMOKE_BODY)
+}
 $responseHeaders = @{}
 try {
   $response = Invoke-WebRequest @requestParameters
@@ -83,6 +86,14 @@ async function request(baseUrl, pathname, options = {}) {
   const target = new URL(pathname, `${baseUrl}/`);
   const { timeout = 60_000, ...requestOptions } = options;
   if (process.platform === "win32" && !new Set(["localhost", "127.0.0.1", "::1"]).has(target.hostname)) {
+    let requestBody = null;
+    if (typeof requestOptions.body === "string") {
+      requestBody = Buffer.from(requestOptions.body, "utf8");
+    } else if (Buffer.isBuffer(requestOptions.body) || requestOptions.body instanceof Uint8Array) {
+      requestBody = Buffer.from(requestOptions.body);
+    } else if (requestOptions.body != null) {
+      fail(`${pathname} uses an unsupported PowerShell smoke request body`);
+    }
     const requestHeaders = Object.fromEntries(
       new Headers({ "user-agent": userAgent, ...(requestOptions.headers ?? {}) }).entries(),
     );
@@ -96,6 +107,8 @@ async function request(baseUrl, pathname, options = {}) {
           CODEX_PET_SMOKE_URL: target.href,
           CODEX_PET_SMOKE_METHOD: requestOptions.method ?? "GET",
           CODEX_PET_SMOKE_HEADERS: Buffer.from(JSON.stringify(requestHeaders)).toString("base64"),
+          CODEX_PET_SMOKE_HAS_BODY: requestBody ? "1" : "0",
+          CODEX_PET_SMOKE_BODY: requestBody?.toString("base64") ?? "",
         },
         maxBuffer: 64 * 1024 * 1024,
         windowsHide: true,
