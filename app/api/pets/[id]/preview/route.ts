@@ -1,4 +1,5 @@
 import { findPublicPet } from "../../../../../lib/public-pet-catalog";
+import { getPetRegistryBindings } from "../../../../../lib/runtime-bindings";
 
 export async function GET(
   request: Request,
@@ -8,7 +9,11 @@ export async function GET(
   const pet = findPublicPet(id);
   if (!pet) return Response.json({ error: "Published pet not found" }, { status: 404 });
 
-  const asset = await fetch(new URL(pet.previewPath, request.url));
+  const assets = getPetRegistryBindings()?.ASSETS;
+  if (!assets) {
+    return Response.json({ error: "Pet preview storage is unavailable" }, { status: 503 });
+  }
+  const asset = await assets.fetch(new Request(new URL(pet.previewPath, request.url)));
   if (!asset.ok || !asset.body) {
     return Response.json({ error: "Published pet preview is unavailable" }, { status: 404 });
   }

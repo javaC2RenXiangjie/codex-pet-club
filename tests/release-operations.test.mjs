@@ -25,7 +25,17 @@ async function builtWorker() {
 
 function workerEnvironment() {
   return {
-    ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) },
+    ASSETS: {
+      fetch: async (request) => {
+        const url = new URL(request.url);
+        if (url.pathname.startsWith("/registry/previews/")) {
+          return new Response(new Uint8Array([82, 73, 70, 70]), {
+            headers: { "content-type": "image/webp" },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    },
     PET_FILES: { get: async () => ({ body: new Uint8Array([80, 75, 3, 4]) }) },
   };
 }
@@ -56,6 +66,14 @@ test("built registry exposes active version metadata and package header", async 
   );
   assert.equal(packageResponse.status, 200);
   assert.equal(packageResponse.headers.get("x-pet-version"), "1.0.0");
+
+  const previewResponse = await worker.fetch(
+    new Request(`http://localhost/api/pets/${id}/preview`),
+    workerEnvironment(),
+    workerContext,
+  );
+  assert.equal(previewResponse.status, 200);
+  assert.equal(previewResponse.headers.get("content-type"), "image/webp");
 });
 
 test("builds a validated release and retains previous versions", async () => {
