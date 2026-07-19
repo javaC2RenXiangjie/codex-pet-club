@@ -23,15 +23,17 @@ test("adds verified email accounts with secure browser sessions", async () => {
   assert.match(auth, /SameSite=Lax/);
   assert.match(auth, /HttpOnly/);
   assert.match(auth, /; Secure/);
-  assert.match(auth, /SENDGRID_API_KEY/);
-  assert.match(auth, /api\.sendgrid\.com\/v3\/mail\/send/);
+  assert.match(auth, /MAIL_SERVICE_URL/);
+  assert.match(auth, /MAIL_SERVICE_TOKEN/);
+  assert.match(auth, /\/v1\/verification-code/);
+  assert.match(auth, /endpoint\.protocol !== "https:"/);
   assert.match(auth, /response\.status !== 202/);
   assert.match(requestCode, /requestEmailCode/);
   assert.match(verifyCode, /set-cookie/);
   assert.match(session, /logoutSession/);
   assert.match(worker, /AUTH_SECRET/);
-  assert.match(worker, /SENDGRID_API_KEY/);
-  assert.match(worker, /EMAIL_FROM/);
+  assert.match(worker, /MAIL_SERVICE_URL/);
+  assert.match(worker, /MAIL_SERVICE_TOKEN/);
 });
 
 test("limits each account to three revocable hashed Skill keys", async () => {

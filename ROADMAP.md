@@ -37,7 +37,8 @@
    - D1 增加用户、验证码、会话、Key 和认证限流表
    - R2 备份 schema v2 增加用户与 Key 哈希，并兼容 schema v1 恢复
    - 增加迁移执行和账户备份恢复自动化测试
-   - 生产依赖 `AUTH_SECRET`、SendGrid API Key 和已验证发件邮箱
+   - 生产依赖 `AUTH_SECRET`、自托管邮件服务 URL 和独立服务 Token
+   - 邮件服务复用服务器现有 SMTP 配置，只发送固定验证码模板并执行第二层限流
 
 ## 下一版本：v0.4.1 Skill 身份绑定
 

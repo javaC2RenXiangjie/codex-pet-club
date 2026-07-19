@@ -93,8 +93,8 @@ function bindings(request: Request) {
   return {
     db: runtime.DB,
     authSecret: configuredSecret || "local-codex-pet-club-auth-secret",
-    sendgridApiKey: runtime.SENDGRID_API_KEY?.trim() ?? "",
-    emailFrom: runtime.EMAIL_FROM?.trim() ?? "",
+    mailServiceUrl: runtime.MAIL_SERVICE_URL?.trim() ?? "",
+    mailServiceToken: runtime.MAIL_SERVICE_TOKEN?.trim() ?? "",
   };
 }
 
@@ -288,32 +288,40 @@ async function sendEmailCode(
   request: Request,
   email: string,
   code: string,
-  sendgridApiKey: string,
-  emailFrom: string,
+  mailServiceUrl: string,
+  mailServiceToken: string,
 ) {
   if (isLoopback(request)) return { development: true };
-  if (!sendgridApiKey || !emailFrom) {
+  if (!mailServiceUrl || !mailServiceToken) {
     throw new UserAuthError("邮件服务尚未配置", 503);
   }
-  normalizeEmail(emailFrom);
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(`${mailServiceUrl.replace(/\/+$/u, "")}/v1/verification-code`);
+  } catch {
+    throw new UserAuthError("邮件服务尚未配置", 503);
+  }
+  if (endpoint.protocol !== "https:") {
+    throw new UserAuthError("邮件服务尚未配置", 503);
+  }
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${sendgridApiKey}`,
+      authorization: `Bearer ${mailServiceToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email }] }],
-      from: { email: emailFrom, name: "Codex Pet Club" },
-      subject: "Codex Pet Club 登录验证码",
-      content: [{
-        type: "text/plain",
-        value: `你的验证码是：${code}\n\n验证码 10 分钟内有效。如果不是你本人操作，请忽略这封邮件。`,
-      }],
+      email,
+      code,
+      expiresInMinutes: EMAIL_CODE_TTL_MS / 60_000,
     }),
   });
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("retry-after") ?? "60";
+    throw new UserAuthError("操作过于频繁，请稍后再试", 429, { "retry-after": retryAfter });
+  }
   if (response.status !== 202) {
-    console.error("SendGrid rejected verification email", response.status);
+    console.error("Mail service rejected verification email", response.status);
     throw new UserAuthError("验证码邮件发送失败，请稍后重试", 502);
   }
   return { development: false };
@@ -321,7 +329,7 @@ async function sendEmailCode(
 
 export async function requestEmailCode(request: Request, rawEmail: unknown) {
   const email = normalizeEmail(rawEmail);
-  const { db, authSecret, sendgridApiKey, emailFrom } = bindings(request);
+  const { db, authSecret, mailServiceUrl, mailServiceToken } = bindings(request);
   await ensureUserAuthSchema(db);
   const now = Date.now();
   const ip = request.headers.get("cf-connecting-ip")?.trim() || "local";
@@ -348,7 +356,7 @@ export async function requestEmailCode(request: Request, rawEmail: unknown) {
      VALUES (?, ?, ?, ?, 0, NULL, ?)`,
   ).bind(id, email, codeHash, now + EMAIL_CODE_TTL_MS, createdAt).run();
   try {
-    const delivery = await sendEmailCode(request, email, code, sendgridApiKey, emailFrom);
+    const delivery = await sendEmailCode(request, email, code, mailServiceUrl, mailServiceToken);
     return {
       ok: true,
       expiresInSeconds: EMAIL_CODE_TTL_MS / 1000,
