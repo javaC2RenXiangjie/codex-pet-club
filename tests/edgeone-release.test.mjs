@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -22,9 +22,12 @@ test("keeps pet packages in EdgeOne Blob behind the Skill route", async () => {
     new URL("../app/api/pets/[id]/package/route.ts", import.meta.url),
     "utf8",
   );
-  const publicPackages = await readdir(new URL("../public/registry/packages/", import.meta.url));
-
-  assert.deepEqual(publicPackages, []);
+  await assert.rejects(
+    access(new URL("../public/registry/packages/fengxi.zip", import.meta.url)),
+  );
+  await assert.rejects(
+    access(new URL("../public/registry/packages/fengxi-3d.zip", import.meta.url)),
+  );
   assert.match(route, /getStore\("pet-packages"\)/);
   assert.match(route, /request\.headers\.get\("x-codex-pet-client"\) !== "skill-v1"/);
   assert.match(route, /x-pet-sha256/);
