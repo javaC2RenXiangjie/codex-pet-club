@@ -3,12 +3,15 @@ import type {
   D1PreparedStatement,
 } from "@cloudflare/workers-types";
 import { unzipSync } from "fflate";
+import { findPublicPetByKey } from "./public-pet-catalog";
 import { getPetRegistryBindings } from "./runtime-bindings";
 
 const MAX_PACKAGE_BYTES = 32 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 96 * 1024 * 1024;
 const EXPECTED_WIDTH = 1536;
 const EXPECTED_HEIGHT = 2288;
+const COMMUNITY_VERSION = "1.0.0";
+const MAX_PENDING_SUBMISSIONS = 50;
 
 type PetRow = {
   id: string;
@@ -35,6 +38,7 @@ export type PublicPet = {
   description: string;
   author: string;
   license: string;
+  version: string;
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
@@ -123,6 +127,7 @@ function toPublicPet(row: PetRow): PublicPet {
     description: row.description,
     author: row.author,
     license: row.license,
+    version: COMMUNITY_VERSION,
     sha256: row.sha256,
     sizeBytes: row.size_bytes,
     updatedAt: row.published_at ?? row.updated_at,
@@ -225,13 +230,19 @@ export async function moderateSubmission(
   reviewNote = "",
 ): Promise<ModerationSubmission> {
   const id = safePublicId(publicId);
-  const { db } = bindings();
+  const { db, files } = bindings();
   await ensureSchema(db);
   const current = await submissionRow(id);
   if (current.status !== "pending") {
     throw new RegistryError("Only pending submissions can be reviewed", 409);
   }
   if (status === "published") {
+    if (findPublicPetByKey(current.slug)) {
+      throw new RegistryError(
+        `The official catalog already uses the pet key ${current.slug}`,
+        409,
+      );
+    }
     const conflict = await db
       .prepare(
         "SELECT id FROM pet_submissions WHERE slug = ? AND status = 'published' AND id <> ? LIMIT 1",
@@ -246,22 +257,63 @@ export async function moderateSubmission(
     }
   }
   const now = new Date().toISOString();
-  await db
-    .prepare(
-      `UPDATE pet_submissions
-       SET status = ?, review_note = ?, reviewed_at = ?, updated_at = ?, published_at = ?
-       WHERE id = ? AND status = 'pending'`,
-    )
-    .bind(
-      status,
-      reviewNote.trim().slice(0, 500),
-      now,
-      now,
-      status === "published" ? now : null,
-      id,
-    )
-    .run();
+  let publishedKey: string | null = null;
+  if (status === "published") {
+    const pendingObject = await files.get(current.file_key);
+    if (!pendingObject?.body) {
+      throw new RegistryError("Submission package is unavailable", 404);
+    }
+    publishedKey = `packages/${id}/${COMMUNITY_VERSION}/${current.sha256}.zip`;
+    await files.put(publishedKey, pendingObject.body, {
+      httpMetadata: { contentType: "application/zip" },
+      customMetadata: {
+        sha256: current.sha256,
+        slug: current.slug,
+        status: "published",
+        version: COMMUNITY_VERSION,
+      },
+    });
+  }
+  try {
+    await db
+      .prepare(
+        `UPDATE pet_submissions
+         SET status = ?, file_key = ?, review_note = ?, reviewed_at = ?, updated_at = ?, published_at = ?
+         WHERE id = ? AND status = 'pending'`,
+      )
+      .bind(
+        status,
+        publishedKey ?? current.file_key,
+        reviewNote.trim().slice(0, 500),
+        now,
+        now,
+        status === "published" ? now : null,
+        id,
+      )
+      .run();
+  } catch (error) {
+    if (publishedKey) await files.delete(publishedKey);
+    throw error;
+  }
+  if (publishedKey && publishedKey !== current.file_key) {
+    await files.delete(current.file_key);
+  }
   return toModerationSubmission(await submissionRow(id));
+}
+
+export async function getSubmissionStatus(publicId: string) {
+  const row = await submissionRow(publicId);
+  return {
+    id: row.id,
+    petKey: row.slug,
+    displayName: row.name,
+    status: row.status,
+    sha256: row.sha256,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+  };
 }
 
 export async function getModerationSprite(publicId: string) {
@@ -489,6 +541,27 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
       : "unspecified";
   const { db, files } = bindings();
   await ensureSchema(db);
+  if (findPublicPetByKey(decoded.slug)) {
+    throw new RegistryError(`The official catalog already uses the pet key ${decoded.slug}`, 409);
+  }
+  const duplicate = await db
+    .prepare(
+      "SELECT id FROM pet_submissions WHERE slug = ? AND status IN ('pending', 'published') LIMIT 1",
+    )
+    .bind(decoded.slug)
+    .first<{ id: string }>();
+  if (duplicate) {
+    throw new RegistryError(
+      `A pending or published submission already uses the pet key ${decoded.slug}`,
+      409,
+    );
+  }
+  const pending = await db
+    .prepare("SELECT COUNT(*) AS count FROM pet_submissions WHERE status = 'pending'")
+    .first<{ count: number }>();
+  if ((pending?.count ?? 0) >= MAX_PENDING_SUBMISSIONS) {
+    throw new RegistryError("The moderation queue is full. Try again later.", 429);
+  }
   await files.put(fileKey, bytes, {
     httpMetadata: { contentType: "application/zip" },
     customMetadata: { sha256, slug: decoded.slug, status: "pending" },
@@ -519,5 +592,11 @@ export async function createSubmission(file: File, metadata: Record<string, unkn
     await files.delete(fileKey);
     throw error;
   }
-  return { id, petKey: decoded.slug, status: "pending" as const, sha256 };
+  return {
+    id,
+    petKey: decoded.slug,
+    status: "pending" as const,
+    sha256,
+    statusPath: `/api/submissions/${id}`,
+  };
 }

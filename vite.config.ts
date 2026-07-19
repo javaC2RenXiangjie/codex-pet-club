@@ -19,6 +19,13 @@ const localBindingConfig = {
       bucket_name: "codex-pet-club-packages",
     },
   ],
+  d1_databases: [
+    {
+      binding: "DB",
+      database_name: "codex-pet-club-db",
+      database_id: "c0e28f31-e707-4f03-a9ce-c56eed3fe337",
+    },
+  ],
 };
 
 export default defineConfig(async () => {

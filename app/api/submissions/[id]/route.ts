@@ -1,5 +1,9 @@
-import { publicMetadata, resolvePublicPet } from "../../../../lib/public-registry";
-import { RegistryError } from "../../../../lib/pet-registry";
+import {
+  getSubmissionStatus,
+  RegistryError,
+} from "../../../../lib/pet-registry";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: Request,
@@ -7,13 +11,9 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const resolved = await resolvePublicPet(id);
-    if (!resolved) {
-      return Response.json({ error: "Published pet not found" }, { status: 404 });
-    }
     return Response.json(
-      { pet: publicMetadata(resolved) },
-      { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },
+      { submission: await getSubmissionStatus(id) },
+      { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
     if (error instanceof RegistryError) {

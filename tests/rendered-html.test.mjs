@@ -39,7 +39,7 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
   assert.match(html, /SKILL ONLY/);
   assert.match(html, /安装 Skill/);
   assert.match(html, /href="\/skill"/);
-  assert.match(html, /投稿内测中/);
+  assert.match(html, /分享我的桌宠/);
   assert.doesNotMatch(html, /codex-pet-club-skill\.zip/);
   assert.doesNotMatch(html, /OFFICIAL CODEX SKILL/);
   assert.doesNotMatch(html, /-source\.zip|拿源文件|直接下载可编辑的源文件/);
@@ -68,6 +68,7 @@ test("ships only the official Skill and removes direct pet downloads", async () 
   assert.match(skillPage, /OFFICIAL CODEX SKILL/);
   assert.match(skillPage, /copyInstallPrompt/);
   assert.match(skillPage, /copyRegistryPrompt/);
+  assert.match(skillPage, /copyPublishPrompt/);
   assert.match(skillPage, /navigator\.clipboard\.writeText/);
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
@@ -103,18 +104,19 @@ test("declares registry storage and exposes the pet API", async () => {
     readFile(new URL("../app/api/pets/[id]/package/route.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES" });
+  assert.deepEqual(JSON.parse(hosting), { r2: "PET_FILES", d1: "DB" });
   assert.match(listRoute, /export async function GET/);
   assert.match(listRoute, /export async function POST/);
-  assert.match(detailRoute, /findPublicPet/);
+  assert.match(detailRoute, /resolvePublicPet/);
   assert.match(packageRoute, /getPetRegistryBindings/);
   assert.match(packageRoute, /x-pet-key/);
   assert.match(packageRoute, /x-codex-pet-client/);
 });
 
-test("hides the moderation workspace from the public release", async () => {
+test("renders the protected online moderation workspace", async () => {
   const response = await render("/admin");
-  assert.equal(response.status, 404);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /进入桌宠审核台/);
 });
 
 test("exposes moderation list, decision, and sprite preview routes", async () => {
@@ -155,7 +157,7 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(decisionRoute, /export async function PATCH/);
   assert.match(decisionRoute, /moderateSubmission/);
   assert.match(spriteRoute, /image\/webp/);
-  assert.match(publicPreviewRoute, /findPublicPet/);
+  assert.match(publicPreviewRoute, /resolvePublicPet/);
   assert.match(publicPreviewRoute, /public, max-age=86400, immutable/);
   assert.match(player, /setInterval/);
   assert.match(player, /backgroundPosition/);
@@ -189,12 +191,16 @@ test("published cards use the real animated pet preview", async () => {
   assert.match(player, /"card" \| "admin" \| "detail"/);
 });
 
-test("first public release keeps moderation and uploads off the public internet", async () => {
-  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+test("opens moderated uploads while keeping admin APIs authenticated", async () => {
+  const [worker, uploadRoute, adminAuth] = await Promise.all([
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/pets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/admin-auth.ts", import.meta.url), "utf8"),
+  ]);
 
-  assert.match(worker, /isLoopbackHost/);
-  assert.match(worker, /url\.pathname === "\/admin"/);
-  assert.match(worker, /url\.pathname\.startsWith\("\/api\/admin\/"\)/);
-  assert.match(worker, /request\.method === "POST" && url\.pathname === "\/api\/pets"/);
-  assert.match(worker, /Community submissions are not open in the first public release/);
+  assert.doesNotMatch(worker, /firstLaunchGuard/);
+  assert.match(uploadRoute, /createSubmission/);
+  assert.match(uploadRoute, /status: 202/);
+  assert.match(adminAuth, /authorization/);
+  assert.match(adminAuth, /Bearer/);
 });

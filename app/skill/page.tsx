@@ -49,6 +49,13 @@ export default function SkillPage() {
     );
   }
 
+  function copyPublishPrompt() {
+    return copyText(
+      "使用 $codex-pet-club，把我本地的桌宠“你的桌宠名称”传到桌宠库",
+      "桌宠投稿指令已复制",
+    );
+  }
+
   return (
     <main className="skill-page-shell">
       <header className="site-header">
@@ -134,6 +141,20 @@ export default function SkillPage() {
       <section className="skill-safety-note">
         <strong>为什么必须通过 Skill？</strong>
         <p>Skill 会验证桌宠清单、图集尺寸和校验和，并在覆盖已有桌宠前自动备份。网站只负责展示，不暴露桌宠包直链。</p>
+      </section>
+
+      <section className="skill-command-section" id="publish">
+        <div className="skill-command-copy">
+          <span className="section-kicker">PUBLISH WITH CODEX</span>
+          <h2>把本地桌宠交给 Skill 投稿</h2>
+          <p>把桌宠名称替换成你本地列表里的真实名称。Skill 会先验证和打包，再上传到审核队列；网页不提供手动上传入口。</p>
+          <button className="button button--dark" onClick={copyPublishPrompt}>复制投稿指令</button>
+        </div>
+        <div className="skill-command-card">
+          <span>YOU → CODEX</span>
+          <code>使用 $codex-pet-club，把我本地的桌宠“你的桌宠名称”传到桌宠库</code>
+          <div><strong>审核状态：</strong>上传成功后会返回提交 ID，可继续让 Codex 查询审核结果。</div>
+        </div>
       </section>
 
       <footer>

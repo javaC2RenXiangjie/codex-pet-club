@@ -2,7 +2,7 @@ import {
   getModerationSprite,
   RegistryError,
 } from "../../../../../../lib/pet-registry";
-import { localOnlyResponse } from "../../../../../../lib/local-only";
+import { adminOnlyResponse } from "../../../../../../lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const blocked = localOnlyResponse(request);
+  const blocked = await adminOnlyResponse(request);
   if (blocked) return blocked;
   try {
     const { id } = await context.params;

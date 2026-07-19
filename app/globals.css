@@ -444,6 +444,17 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-identity > div { display: grid; place-items: center; width: 42px; height: 42px; color: #eff3ed; background: var(--ink); border: 2px solid var(--line); border-radius: 50%; font-weight: 850; box-shadow: 3px 3px 0 #c2c4b8; }
 .admin-security-banner { max-width: 1240px; display: flex; align-items: center; gap: 16px; margin: 30px auto 24px; padding: 13px 16px; background: #fff3c4; border: 1.5px solid #76671b; border-radius: 7px; color: #655915; font-size: 12px; }
 .admin-security-banner strong { flex: 0 0 auto; color: #342e0b; font: 850 10px var(--font-geist-mono), monospace; letter-spacing: .03em; }
+.admin-login { max-width: 620px; margin: 64px auto 0; padding: 42px; background: var(--paper); border: 2px solid var(--line); border-radius: 18px 10px 24px 12px; box-shadow: 8px 8px 0 var(--line); }
+.admin-login > span { color: #687068; font: 850 9px var(--font-geist-mono), monospace; letter-spacing: .14em; }
+.admin-login h2 { margin: 11px 0 10px; font-size: 34px; letter-spacing: -.045em; }
+.admin-login > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.admin-login form { display: grid; gap: 10px; margin-top: 28px; }
+.admin-login label { font-size: 11px; font-weight: 850; }
+.admin-login input { width: 100%; padding: 13px 14px; color: var(--ink); background: #f0eee5; border: 1.5px solid var(--line); border-radius: 7px; outline: none; font: 12px var(--font-geist-mono), monospace; }
+.admin-login input:focus { box-shadow: 3px 3px 0 var(--teal); }
+.admin-login button { justify-self: end; margin-top: 8px; padding: 11px 15px; color: #f5f8f3; background: var(--ink); border: 1.5px solid var(--line); border-radius: 6px; box-shadow: 3px 3px 0 var(--teal); cursor: pointer; font-size: 11px; font-weight: 850; }
+.admin-login button:disabled { cursor: not-allowed; opacity: .45; }
+.admin-login .admin-message { margin: 20px 0 0; color: #73352f; background: #f6d7d1; border-color: #a84e44; }
 
 .admin-stats { max-width: 1240px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 0 auto 44px; }
 .admin-stats article { position: relative; min-height: 136px; padding: 20px 22px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px 7px 12px 8px; box-shadow: 4px 4px 0 rgba(30,36,33,.18); overflow: hidden; }
@@ -474,6 +485,7 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-sprite-stage::before { left: -62px; top: -55px; }
 .admin-sprite-stage::after { right: -60px; bottom: -70px; }
 .admin-sprite-meta { position: absolute; z-index: 3; left: 12px; top: 12px; padding: 5px 7px; color: #3c4941; background: rgba(255,250,240,.86); border: 1px solid #7c887f; border-radius: 4px; font: 800 8px var(--font-geist-mono), monospace; }
+.admin-sprite-loading { position: relative; z-index: 2; color: #5f6a62; font: 800 9px var(--font-geist-mono), monospace; }
 .admin-motion-controls { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 100%; }
 .admin-motion-controls button { min-width: 0; padding: 6px 3px; color: #566159; background: rgba(255,250,240,.7); border: 1px solid #8d978f; border-radius: 4px; cursor: pointer; font-size: 8px; font-weight: 800; }
 .admin-motion-controls button:hover { background: var(--paper); }

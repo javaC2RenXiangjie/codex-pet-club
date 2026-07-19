@@ -11,7 +11,11 @@ CREATE TABLE `pet_submissions` (
 	`size_bytes` integer NOT NULL,
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
-	`published_at` text
+	`published_at` text,
+	`reviewed_at` text,
+	`review_note` text DEFAULT '' NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `pet_published_slug_unique` ON `pet_submissions` (`slug`) WHERE "pet_submissions"."status" = 'published';
+--> statement-breakpoint
+CREATE INDEX `pet_status_updated_idx` ON `pet_submissions` (`status`,`updated_at` DESC);
