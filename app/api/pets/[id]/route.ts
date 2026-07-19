@@ -1,22 +1,14 @@
-import {
-  getPublishedPet,
-  RegistryError,
-} from "../../../../lib/pet-registry";
-
-export const dynamic = "force-dynamic";
+import { findPublicPet, toPublicPet } from "../../../../lib/public-pet-catalog";
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await context.params;
-    return Response.json({ pet: await getPublishedPet(id) });
-  } catch (error) {
-    if (error instanceof RegistryError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    console.error(error);
-    return Response.json({ error: "Unexpected registry error" }, { status: 500 });
-  }
+  const { id } = await context.params;
+  const pet = findPublicPet(id);
+  if (!pet) return Response.json({ error: "Published pet not found" }, { status: 404 });
+  return Response.json(
+    { pet: toPublicPet(pet) },
+    { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },
+  );
 }
