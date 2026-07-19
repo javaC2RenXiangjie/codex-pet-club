@@ -1,6 +1,7 @@
 import {
   moderateSubmission,
   RegistryError,
+  unpublishSubmission,
 } from "../../../../../lib/pet-registry";
 import { adminOnlyResponse } from "../../../../../lib/admin-auth";
 
@@ -17,15 +18,19 @@ export async function PATCH(
       status?: unknown;
       reviewNote?: unknown;
     };
-    if (body.status !== "published" && body.status !== "rejected") {
-      throw new RegistryError("status must be published or rejected");
+    if (
+      body.status !== "published" &&
+      body.status !== "rejected" &&
+      body.status !== "unpublished"
+    ) {
+      throw new RegistryError("status must be published, rejected, or unpublished");
     }
     const { id } = await context.params;
-    const submission = await moderateSubmission(
-      id,
-      body.status,
-      typeof body.reviewNote === "string" ? body.reviewNote : "",
-    );
+    const reviewNote = typeof body.reviewNote === "string" ? body.reviewNote : "";
+    const submission =
+      body.status === "unpublished"
+        ? await unpublishSubmission(id, reviewNote)
+        : await moderateSubmission(id, body.status, reviewNote);
     return Response.json(
       { submission },
       { headers: { "cache-control": "private, no-store" } },

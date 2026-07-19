@@ -70,6 +70,7 @@ test("declares production R2 and D1 bindings", async () => {
   assert.match(worker, /DB: D1Database/);
   assert.equal(JSON.parse(generatedWrangler).assets.binding, "ASSETS");
   assert.equal(JSON.parse(generatedWrangler).d1_databases[0].binding, "DB");
+  assert.deepEqual(JSON.parse(generatedWrangler).triggers.crons, ["0 3 * * *"]);
 });
 
 test("ships valid WebP previews for every public pet", async () => {
@@ -94,6 +95,33 @@ test("accepts moderated Skill submissions", async () => {
   assert.match(route, /createSubmission/);
   assert.match(route, /status: 202/);
   assert.match(route, /multipart\/form-data/);
+  assert.match(route, /enforceSubmissionRateLimit/);
+});
+
+test("adds rate limits, audit events, unpublish, and R2 backups", async () => {
+  const [registry, backup, decisionRoute, backupRoute, migration, worker] =
+    await Promise.all([
+      readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
+      readFile(new URL("../lib/registry-backup.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/pets/[id]/route.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/backups/route.ts", import.meta.url), "utf8"),
+      readFile(new URL("../drizzle/0001_registry_operations.sql", import.meta.url), "utf8"),
+      readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    ]);
+
+  assert.match(registry, /SUBMISSION_RATE_LIMIT = 3/);
+  assert.match(registry, /submission_rate_limits/);
+  assert.match(registry, /moderation_events/);
+  assert.match(registry, /unpublishSubmission/);
+  assert.match(registry, /sha256 = \?/);
+  assert.match(decisionRoute, /unpublished/);
+  assert.match(backup, /backups\/d1\//);
+  assert.match(backup, /moderationEvents/);
+  assert.match(backupRoute, /createRegistryBackup/);
+  assert.match(migration, /CREATE TABLE `moderation_events`/);
+  assert.match(migration, /CREATE TABLE `submission_rate_limits`/);
+  assert.match(worker, /async scheduled/);
+  assert.match(worker, /createRegistryBackup/);
 });
 
 test("protects online moderation with a Worker secret", async () => {

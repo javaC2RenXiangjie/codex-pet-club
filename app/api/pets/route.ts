@@ -1,5 +1,6 @@
 import {
   createSubmission,
+  enforceSubmissionRateLimit,
   RegistryError,
 } from "../../../lib/pet-registry";
 import { listAllPublicPets } from "../../../lib/public-registry";
@@ -10,7 +11,13 @@ function registryError(error: unknown) {
   if (error instanceof RegistryError) {
     return Response.json(
       { error: error.message },
-      { status: error.status, headers: { "cache-control": "private, no-store" } },
+      {
+        status: error.status,
+        headers: {
+          "cache-control": "private, no-store",
+          ...error.headers,
+        },
+      },
     );
   }
   console.error(error);
@@ -41,6 +48,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await enforceSubmissionRateLimit(request);
     const form = await request.formData();
     const packageFile = form.get("package");
     const metadataText = form.get("metadata");
