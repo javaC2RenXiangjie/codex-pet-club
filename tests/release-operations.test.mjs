@@ -204,6 +204,12 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
       response.writeHead(401).end();
     } else if (url.pathname === "/api/admin/health") {
       response.writeHead(401).end();
+    } else if (
+      url.pathname === "/api/pets"
+      && request.method === "POST"
+      && request.headers["content-type"]?.startsWith("multipart/form-data")
+    ) {
+      response.writeHead(401).end();
     } else if (url.pathname === "/api/pets" && request.method === "POST") {
       response.writeHead(415).end();
     } else if (url.pathname === "/api/pets") {

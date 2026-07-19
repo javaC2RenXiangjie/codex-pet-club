@@ -218,6 +218,8 @@ test("opens moderated uploads while keeping admin APIs authenticated", async () 
 
   assert.doesNotMatch(worker, /firstLaunchGuard/);
   assert.match(uploadRoute, /createSubmission/);
+  assert.match(uploadRoute, /apiKeyUser\(request\)/);
+  assert.doesNotMatch(uploadRoute, /optionalApiKeyUser/);
   assert.match(uploadRoute, /status: 202/);
   assert.match(adminAuth, /authorization/);
   assert.match(adminAuth, /Bearer/);

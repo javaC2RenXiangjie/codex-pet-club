@@ -83,7 +83,7 @@ npx wrangler secret put MAIL_SERVICE_TOKEN --config dist/server/wrangler.json
 | `/account` | 邮箱注册、登录与 Skill Key 管理 |
 | `/admin` | 需要管理员凭证的在线审核工作台 |
 | `GET /api/pets` | 获取已发布桌宠 |
-| `POST /api/pets` | Skill 投稿；携带 Key 时绑定创作者账户，旧版匿名投稿暂时兼容 |
+| `POST /api/pets` | Skill 投稿；必须携带有效 Key，并绑定创作者账户 |
 | `GET /api/pets/:id/preview` | 获取已发布桌宠图集 |
 | `GET /api/pets/:id/package` | 官方 Skill 获取桌宠包 |
 | `POST /api/auth/request-code` | 发送邮箱验证码 |
@@ -99,7 +99,7 @@ npx wrangler secret put MAIL_SERVICE_TOKEN --config dist/server/wrangler.json
 - Key 原文只展示一次；服务器只保存 SHA-256 哈希和 8 位前缀。
 - 每个账户最多 3 个有效 Key，撤销后立即释放额度并使使用该 Key 的所有电脑失效。
 - 一个 Key 可以在多台电脑使用，也可以为不同设备分别创建 Key，由用户自行选择。
-- 匿名用户仍可浏览桌宠并通过 Skill 安装；账户只在投稿和管理作品时需要。
+- 匿名用户仍可浏览桌宠并通过 Skill 安装；投稿和作品管理必须使用账户 Key。
 
 ## 发布数据与备份
 
@@ -129,7 +129,7 @@ packages/{catalog-id}/{version}/{sha256}.zip
 
 - 默认使用 Cloudflare 提供的 `*.workers.dev` 地址，无需自定义域名
 - 网页不提供桌宠 ZIP 下载入口，桌宠获取必须经过官方 Skill
-- v0.4.0 先建立账户、Key 和作品归属；Skill 的交互式绑定命令在 v0.4.1 接入
+- v0.4.1 已接入 Skill Key 绑定、身份查询、解绑和带身份投稿
 - 投稿状态查询、创作者主页、改邮箱和账户恢复仍在后续版本
 - 仓库尚未附带开源许可证，公开可见不等于已授予复制、修改或分发许可
 

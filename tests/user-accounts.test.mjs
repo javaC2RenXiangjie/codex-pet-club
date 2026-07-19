@@ -55,7 +55,7 @@ test("limits each account to three revocable hashed Skill keys", async () => {
   assert.doesNotMatch(meRoute, /email: user\.email/);
 });
 
-test("binds authenticated submissions to a stable user id without breaking legacy uploads", async () => {
+test("requires authenticated submissions and binds them to a stable user id", async () => {
   const [registry, upload, schema, migration] = await Promise.all([
     readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/pets/route.ts", import.meta.url), "utf8"),
@@ -66,7 +66,8 @@ test("binds authenticated submissions to a stable user id without breaking legac
   assert.match(registry, /owner_user_id/);
   assert.match(registry, /owner\?\.id \?\? null/);
   assert.match(registry, /owner\?\.displayName/);
-  assert.match(upload, /optionalApiKeyUser/);
+  assert.match(upload, /apiKeyUser\(request\)/);
+  assert.doesNotMatch(upload, /optionalApiKeyUser/);
   assert.match(upload, /createSubmission\([\s\S]*owner/);
   assert.match(schema, /ownerUserId/);
   assert.match(migration, /ALTER TABLE `pet_submissions` ADD `owner_user_id`/);
