@@ -2,6 +2,7 @@ import { adminOnlyResponse } from "../../../../lib/admin-auth";
 import {
   createRegistryBackup,
   listRegistryBackups,
+  verifyRegistryBackup,
 } from "../../../../lib/registry-backup";
 import { RegistryError } from "../../../../lib/pet-registry";
 
@@ -37,6 +38,24 @@ export async function POST(request: Request) {
       { status: 201, headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
+    return registryError(error);
+  }
+}
+
+export async function PATCH(request: Request) {
+  const blocked = await adminOnlyResponse(request);
+  if (blocked) return blocked;
+  try {
+    const body = (await request.json()) as { key?: unknown };
+    const key = typeof body.key === "string" ? body.key : undefined;
+    return Response.json(
+      { verification: await verifyRegistryBackup(key) },
+      { headers: { "cache-control": "private, no-store" } },
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Response.json({ error: "请求内容必须是 JSON" }, { status: 400 });
+    }
     return registryError(error);
   }
 }

@@ -1,6 +1,6 @@
 import {
   listModerationSubmissions,
-  listModerationEvents,
+  queryModerationEvents,
   RegistryError,
 } from "../../../../lib/pet-registry";
 import { listRegistryBackups } from "../../../../lib/registry-backup";
@@ -12,13 +12,18 @@ export async function GET(request: Request) {
   const blocked = await adminOnlyResponse(request);
   if (blocked) return blocked;
   try {
-    const [submissions, events, backups] = await Promise.all([
+    const [submissions, eventPage] = await Promise.all([
       listModerationSubmissions(),
-      listModerationEvents(),
-      listRegistryBackups(),
+      queryModerationEvents(),
     ]);
+    let backups: Awaited<ReturnType<typeof listRegistryBackups>> = [];
+    try {
+      backups = await listRegistryBackups();
+    } catch (error) {
+      console.error("Registry backup list unavailable", error);
+    }
     return Response.json(
-      { submissions, events, backups },
+      { submissions, events: eventPage.events, eventPage, backups },
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {

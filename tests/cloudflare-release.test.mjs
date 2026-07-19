@@ -118,10 +118,32 @@ test("adds rate limits, audit events, unpublish, and R2 backups", async () => {
   assert.match(backup, /backups\/d1\//);
   assert.match(backup, /moderationEvents/);
   assert.match(backupRoute, /createRegistryBackup/);
+  assert.match(backup, /verifyRegistryBackup/);
+  assert.match(backupRoute, /export async function PATCH/);
   assert.match(migration, /CREATE TABLE `moderation_events`/);
   assert.match(migration, /CREATE TABLE `submission_rate_limits`/);
   assert.match(worker, /async scheduled/);
   assert.match(worker, /createRegistryBackup/);
+});
+
+test("reports registry health, validates restores, and paginates the audit log", async () => {
+  const [health, healthRoute, registry, eventRoute, restoreDrill] = await Promise.all([
+    readFile(new URL("../lib/registry-health.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/health/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/events/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/restore-backup-drill.py", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(health, /overall: "healthy" \| "degraded"/);
+  assert.match(health, /ageHours <= 36/);
+  assert.match(healthRoute, /adminOnlyResponse/);
+  assert.match(registry, /queryModerationEvents/);
+  assert.match(registry, /LIMIT \? OFFSET \?/);
+  assert.match(eventRoute, /pageSize/);
+  assert.match(eventRoute, /操作类型无效/);
+  assert.match(restoreDrill, /sqlite3\.connect\(":memory:"\)/);
+  assert.match(restoreDrill, /Restored row count does not match/);
 });
 
 test("protects online moderation with a Worker secret", async () => {
@@ -137,7 +159,8 @@ test("protects online moderation with a Worker secret", async () => {
   assert.match(guard, /status: 401/);
   assert.match(guard, /crypto\.subtle\.digest/);
   assert.match(adminList, /adminOnlyResponse/);
-  assert.match(adminPage, /sessionStorage/);
+  assert.doesNotMatch(adminPage, /sessionStorage/);
+  assert.match(adminPage, /刷新后需要重新输入/);
   assert.match(adminPage, /type="password"/);
 });
 

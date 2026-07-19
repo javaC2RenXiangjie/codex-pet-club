@@ -466,6 +466,21 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-stats strong { display: inline-block; margin-top: 10px; font: 850 42px/1 var(--font-geist-mono), monospace; letter-spacing: -.08em; }
 .admin-stats small { position: relative; z-index: 1; float: right; margin-top: 24px; color: #888d84; font: 700 9px var(--font-geist-mono), monospace; }
 
+.admin-health { max-width: 1240px; margin: 0 auto 18px; padding: 20px 22px; background: #e8eadf; border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 4px 4px 0 rgba(30,36,33,.18); }
+.admin-health-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.admin-health-heading span { color: #737970; font: 800 8px var(--font-geist-mono), monospace; letter-spacing: .13em; }
+.admin-health-heading h2 { margin: 5px 0 0; font-size: 22px; letter-spacing: -.035em; }
+.admin-health-heading button { padding: 8px 11px; background: transparent; border: 1.5px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 850; }
+.admin-health-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 17px; }
+.admin-health-grid article { position: relative; min-width: 0; padding: 12px 14px 12px 31px; background: var(--paper); border: 1px solid #c5c7bd; border-radius: 6px; }
+.admin-health-grid article::before { content: ""; position: absolute; left: 13px; top: 15px; width: 8px; height: 8px; background: #d29a43; border: 1px solid var(--line); border-radius: 50%; }
+.admin-health-grid article.healthy::before { background: #54b89f; }
+.admin-health-grid article.degraded::before { background: #df7569; }
+.admin-health-grid span, .admin-health-grid strong, .admin-health-grid small { display: block; }
+.admin-health-grid span { color: #858980; font: 700 7px var(--font-geist-mono), monospace; letter-spacing: .07em; }
+.admin-health-grid strong { margin-top: 5px; font-size: 13px; }
+.admin-health-grid small { margin-top: 4px; overflow: hidden; color: #737970; font: 8px var(--font-geist-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }
+
 .admin-operations { max-width: 1240px; display: grid; grid-template-columns: .85fr 1.15fr; gap: 18px; margin: 0 auto 44px; }
 .admin-operations > article { min-width: 0; padding: 22px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 4px 4px 0 rgba(30,36,33,.18); }
 .admin-operations-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -473,6 +488,8 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-operations-heading h2 { margin: 5px 0 0; font-size: 22px; letter-spacing: -.035em; }
 .admin-operations-heading button { padding: 8px 11px; color: #f5f8f3; background: var(--ink); border: 1.5px solid var(--line); border-radius: 5px; box-shadow: 2px 2px 0 var(--teal); cursor: pointer; font-size: 10px; font-weight: 850; }
 .admin-operations-heading button:disabled { cursor: wait; opacity: .55; }
+.admin-operation-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.admin-operation-buttons button:first-child { color: var(--ink); background: transparent; box-shadow: none; }
 .admin-operations > article > p { margin: 24px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .admin-operations dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin: 20px 0 0; overflow: hidden; background: #d1d1c8; border: 1px solid #d1d1c8; border-radius: 7px; }
 .admin-operations dl > div { padding: 10px; background: #efede4; }
@@ -487,6 +504,18 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-event-dot { width: 8px; height: 8px; background: #e0b64e; border: 1px solid var(--line); border-radius: 50%; }
 .admin-event-dot--published { background: #62c9b1; }
 .admin-event-dot--rejected, .admin-event-dot--unpublished { background: #df7569; }
+.admin-verify-ok, .admin-verify-failed { display: flex; align-items: flex-start; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: 5px; }
+.admin-verify-ok { color: #275a4d !important; background: #d9f0e8; border: 1px solid #6b9d8f; }
+.admin-verify-failed { color: #73352f !important; background: #f6d7d1; border: 1px solid #a84e44; }
+.admin-verify-ok small, .admin-verify-failed small { font: 8px var(--font-geist-mono), monospace; }
+.admin-audit-tools { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 7px; margin-top: 16px; }
+.admin-audit-tools input, .admin-audit-tools select { min-width: 0; padding: 8px 9px; color: var(--ink); background: #efede4; border: 1px solid #bfc1b7; border-radius: 5px; outline: none; font-size: 9px; }
+.admin-audit-tools input:focus, .admin-audit-tools select:focus { border-color: var(--ink); box-shadow: 2px 2px 0 var(--teal); }
+.admin-audit-tools button, .admin-audit-pagination button { padding: 8px 10px; background: transparent; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 9px; font-weight: 800; }
+.admin-audit-tools button:disabled, .admin-audit-pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.admin-audit-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 11px; border-top: 1px dashed #c4c5bc; }
+.admin-audit-pagination > span { color: #7c827a; font: 8px var(--font-geist-mono), monospace; }
+.admin-audit-pagination > div { display: flex; gap: 6px; }
 
 .admin-queue { max-width: 1240px; margin: 0 auto; }
 .admin-queue-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 2px solid var(--line); }
@@ -683,6 +712,8 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
   .admin-stats { grid-template-columns: 1fr; gap: 10px; }
   .admin-stats article { min-height: 104px; }
   .admin-operations { grid-template-columns: 1fr; }
+  .admin-health-grid { grid-template-columns: 1fr; }
+  .admin-audit-tools { grid-template-columns: 1fr; }
   .admin-queue-heading { align-items: flex-start; flex-direction: column; }
   .admin-queue-tools { width: 100%; margin-left: 0; }
   .admin-queue-tools button { flex: 1; }

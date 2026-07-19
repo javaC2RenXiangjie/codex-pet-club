@@ -129,6 +129,9 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
     player,
     registry,
     schema,
+    eventRoute,
+    healthRoute,
+    backupRoute,
   ] =
     await Promise.all([
       readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
@@ -148,6 +151,9 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
       ),
       readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
       readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/events/route.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/health/route.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/backups/route.ts", import.meta.url), "utf8"),
     ]);
 
   assert.match(adminPage, /data-testid={`review-card-/);
@@ -156,9 +162,15 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(adminPage, /下架桌宠/);
   assert.match(adminPage, /最近操作/);
   assert.match(adminPage, /立即备份/);
+  assert.match(adminPage, /恢复预检/);
+  assert.match(adminPage, /服务运行状态/);
+  assert.doesNotMatch(adminPage, /sessionStorage/);
   assert.match(listRoute, /listModerationSubmissions/);
-  assert.match(listRoute, /listModerationEvents/);
+  assert.match(listRoute, /queryModerationEvents/);
   assert.match(listRoute, /listRegistryBackups/);
+  assert.match(eventRoute, /queryModerationEvents/);
+  assert.match(healthRoute, /getRegistryHealth/);
+  assert.match(backupRoute, /verifyRegistryBackup/);
   assert.match(decisionRoute, /export async function PATCH/);
   assert.match(decisionRoute, /moderateSubmission/);
   assert.match(spriteRoute, /image\/webp/);
