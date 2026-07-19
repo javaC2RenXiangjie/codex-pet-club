@@ -56,6 +56,13 @@ export default function SkillPage() {
     );
   }
 
+  function copySubmissionsPrompt() {
+    return copyText(
+      "使用 $codex-pet-club，查看我的投稿",
+      "投稿查询指令已复制",
+    );
+  }
+
   return (
     <main className="skill-page-shell">
       <header className="site-header">
@@ -81,7 +88,7 @@ export default function SkillPage() {
           <p>
             Codex Pet Club Skill 负责按唯一 ID 下载桌宠、验证 v2 图集和校验和、
             备份旧文件；从 v0.4.2 起每次使用还会自动检查并安装官方最新版。
-            创作者也可以绑定账户 Key，让投稿自动归属自己。
+            创作者也可以绑定账户 Key，让投稿自动归属自己，并随时查询全部投稿与审核结果。
           </p>
           <div className="skill-page-actions">
             <a className="button button--primary" href={skillRepositoryUrl} target="_blank" rel="noreferrer">
@@ -97,7 +104,7 @@ export default function SkillPage() {
           <code>{skillRepositoryUrl}</code>
           <div className="skill-terminal-result">
             <span>✓</span>
-            <div><strong>codex-pet-club v0.4.2</strong><small>已安装，后续使用会自动保持最新</small></div>
+            <div><strong>codex-pet-club v0.4.3</strong><small>已安装，后续使用会自动保持最新</small></div>
           </div>
         </div>
       </section>
@@ -167,6 +174,20 @@ export default function SkillPage() {
           <span>YOU → CODEX</span>
           <code>使用 $codex-pet-club，把我本地的桌宠“你的桌宠名称”传到桌宠库</code>
           <div><strong>审核状态：</strong>上传成功后会返回提交 ID，可继续让 Codex 查询审核结果。</div>
+        </div>
+      </section>
+
+      <section className="skill-command-section" id="submissions">
+        <div className="skill-command-copy">
+          <span className="section-kicker">TRACK SUBMISSIONS</span>
+          <h2>跨设备查看我的投稿</h2>
+          <p>投稿记录以服务器上的永久用户 ID 为准。本机只保存便捷缓存；在另一台电脑绑定同一个账户的 Key 后，也能看到完整投稿与审核状态。</p>
+          <button className="button button--dark" onClick={copySubmissionsPrompt}>复制查询指令</button>
+        </div>
+        <div className="skill-command-card">
+          <span>YOU → CODEX</span>
+          <code>使用 $codex-pet-club，查看我的投稿</code>
+          <div><strong>还可以说：</strong>查看最近一次投稿，或只查看待审核 / 已发布 / 已拒绝的投稿。</div>
         </div>
       </section>
 

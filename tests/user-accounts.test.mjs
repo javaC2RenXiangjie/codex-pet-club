@@ -74,6 +74,25 @@ test("requires authenticated submissions and binds them to a stable user id", as
   assert.doesNotMatch(migration, /CREATE TABLE `moderation_events`/);
 });
 
+test("lists and opens only the authenticated creator's submissions", async () => {
+  const [registry, listRoute, detailRoute] = await Promise.all([
+    readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/me/submissions/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/submissions/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(registry, /listCreatorSubmissions/);
+  assert.match(registry, /owner_user_id = \?/);
+  assert.match(registry, /WHERE id = \? AND owner_user_id = \?/);
+  assert.match(registry, /ORDER BY created_at DESC, id DESC/);
+  assert.match(listRoute, /currentUser\(request\)/);
+  assert.match(listRoute, /status: rawStatus/);
+  assert.match(listRoute, /private, no-store/);
+  assert.match(detailRoute, /currentUser\(request\)/);
+  assert.match(detailRoute, /getCreatorSubmission\(id, user\.id\)/);
+  assert.doesNotMatch(detailRoute, /getSubmissionStatus/);
+});
+
 test("renders a creator account and Key management workspace", async () => {
   const account = await readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
@@ -84,6 +103,10 @@ test("renders a creator account and Key management workspace", async () => {
   assert.match(account, /Key 只完整展示一次/);
   assert.match(account, /\/api\/auth\/request-code/);
   assert.match(account, /\/api\/account\/keys/);
+  assert.match(account, /\/api\/me\/submissions/);
+  assert.match(account, /MY SUBMISSIONS/);
+  assert.match(account, /查看详情/);
+  assert.match(account, /复制安装指令/);
   assert.doesNotMatch(account, /localStorage|sessionStorage/);
   assert.match(page, /href="\/account"/);
 });

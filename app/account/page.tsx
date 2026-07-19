@@ -27,6 +27,41 @@ type NewKey = {
   createdAt: string;
 };
 
+type SubmissionStatus = "pending" | "published" | "unpublished" | "rejected";
+
+type CreatorSubmission = {
+  id: string;
+  petKey: string;
+  displayName: string;
+  description: string;
+  license: string;
+  status: SubmissionStatus;
+  version: string;
+  sha256: string;
+  sizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+  reviewedAt: string | null;
+  reviewNote: string;
+};
+
+type SubmissionPage = {
+  submissions: CreatorSubmission[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  status: SubmissionStatus | null;
+};
+
+const submissionStatusLabels: Record<SubmissionStatus, string> = {
+  pending: "待审核",
+  published: "已发布",
+  unpublished: "已下架",
+  rejected: "已拒绝",
+};
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -63,6 +98,13 @@ export default function AccountPage() {
   const [developmentCode, setDevelopmentCode] = useState("");
   const [keyName, setKeyName] = useState("日常使用");
   const [newKey, setNewKey] = useState<NewKey | null>(null);
+  const [submissions, setSubmissions] = useState<CreatorSubmission[]>([]);
+  const [submissionStatus, setSubmissionStatus] = useState<"all" | SubmissionStatus>("all");
+  const [submissionPage, setSubmissionPage] = useState(1);
+  const [submissionMeta, setSubmissionMeta] = useState({ page: 1, total: 0, totalPages: 1 });
+  const [submissionTotal, setSubmissionTotal] = useState(0);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<CreatorSubmission | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -90,6 +132,31 @@ export default function AccountPage() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const parameters = new URLSearchParams({ page: String(submissionPage), pageSize: "12" });
+    if (submissionStatus !== "all") parameters.set("status", submissionStatus);
+    Promise.resolve()
+      .then(() => {
+        if (active) setSubmissionsLoading(true);
+        return jsonRequest<SubmissionPage>(`/api/me/submissions?${parameters}`);
+      })
+      .then((data) => {
+        if (!active) return;
+        setSubmissions(data.submissions);
+        setSubmissionMeta({ page: data.page, total: data.total, totalPages: data.totalPages });
+        if (submissionStatus === "all") setSubmissionTotal(data.total);
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : "投稿记录读取失败");
+      })
+      .finally(() => {
+        if (active) setSubmissionsLoading(false);
+      });
+    return () => { active = false; };
+  }, [user, submissionStatus, submissionPage]);
 
   async function requestCode(event: FormEvent) {
     event.preventDefault();
@@ -191,7 +258,24 @@ export default function AccountPage() {
     setUser(null);
     setKeys([]);
     setNewKey(null);
+    setSubmissions([]);
+    setSelectedSubmission(null);
+    setSubmissionStatus("all");
+    setSubmissionPage(1);
+    setSubmissionTotal(0);
     setMessage("");
+  }
+
+  async function copySubmissionPrompt(submission: CreatorSubmission) {
+    const prompt = submission.status === "published"
+      ? `使用 $codex-pet-club，把这个桌宠下载到我本地，ID：${submission.id}`
+      : `使用 $codex-pet-club，查看投稿状态，ID：${submission.id}`;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setMessage(submission.status === "published" ? "桌宠安装指令已复制" : "投稿状态查询指令已复制");
+    } catch {
+      setMessage("复制失败，请手动复制投稿 ID");
+    }
   }
 
   return (
@@ -261,7 +345,7 @@ export default function AccountPage() {
           <div className="account-summary-grid">
             <article><span>永久用户 ID</span><strong title={user.id}>{user.id.slice(0, 8)}…</strong><small>作品只绑定用户 ID</small></article>
             <article><span>有效 Key</span><strong>{activeKeys.length} / 3</strong><small>撤销后立即释放额度</small></article>
-            <article><span>投稿身份</span><strong>READY</strong><small>新 Skill 可自动携带</small></article>
+            <article><span>我的投稿</span><strong>{submissionTotal}</strong><small>服务器按用户 ID 归档</small></article>
           </div>
 
           <div className="account-key-layout">
@@ -294,6 +378,57 @@ export default function AccountPage() {
               <ul><li>Key 可以复用到多台电脑。</li><li>不要把 Key 分享给其他人。</li><li>撤销 Key 后，使用它的所有电脑都会失效。</li></ul>
             </aside>
           </div>
+
+          <section className="account-panel account-submission-panel">
+            <div className="account-panel-heading">
+              <div><span>MY SUBMISSIONS</span><h2>我的投稿</h2></div>
+              <label className="account-submission-filter">
+                <span>状态</span>
+                <select
+                  onChange={(event) => {
+                    setSubmissionStatus(event.target.value as "all" | SubmissionStatus);
+                    setSubmissionPage(1);
+                  }}
+                  value={submissionStatus}
+                >
+                  <option value="all">全部状态</option>
+                  <option value="pending">待审核</option>
+                  <option value="published">已发布</option>
+                  <option value="rejected">已拒绝</option>
+                  <option value="unpublished">已下架</option>
+                </select>
+              </label>
+            </div>
+            {submissionsLoading ? (
+              <p className="account-empty">正在读取投稿记录…</p>
+            ) : submissions.length === 0 ? (
+              <p className="account-empty">当前筛选下还没有投稿。通过 Skill 上传后会自动出现在这里。</p>
+            ) : (
+              <div className="account-submission-list">
+                {submissions.map((submission) => (
+                  <article key={submission.id}>
+                    <div className="account-submission-main">
+                      <span className={`account-status account-status--${submission.status}`}>{submissionStatusLabels[submission.status]}</span>
+                      <div><strong>{submission.displayName}</strong><code>{submission.id}</code></div>
+                    </div>
+                    <dl>
+                      <div><dt>桌宠标识</dt><dd>{submission.petKey}</dd></div>
+                      <div><dt>投稿时间</dt><dd>{formatDate(submission.createdAt)}</dd></div>
+                      <div><dt>最近更新</dt><dd>{formatDate(submission.updatedAt)}</dd></div>
+                    </dl>
+                    <button onClick={() => setSelectedSubmission(submission)} type="button">查看详情</button>
+                  </article>
+                ))}
+              </div>
+            )}
+            {submissionMeta.totalPages > 1 && (
+              <div className="account-submission-pagination">
+                <button disabled={submissionMeta.page <= 1} onClick={() => setSubmissionPage((page) => Math.max(1, page - 1))} type="button">上一页</button>
+                <span>{submissionMeta.page} / {submissionMeta.totalPages}</span>
+                <button disabled={submissionMeta.page >= submissionMeta.totalPages} onClick={() => setSubmissionPage((page) => page + 1)} type="button">下一页</button>
+              </div>
+            )}
+          </section>
           {message && <p className="account-message account-message--dashboard">{message}</p>}
         </section>
       )}
@@ -306,6 +441,30 @@ export default function AccountPage() {
             <p>Key 只完整展示一次。关闭后无法再次查看完整内容；如果丢失，请撤销并重新生成。</p>
             <code>{newKey.token}</code>
             <div><button onClick={copyBindPrompt} type="button">复制绑定指令</button><button className="account-link-button" onClick={copyKey} type="button">只复制 Key</button><button className="account-link-button" onClick={() => setNewKey(null)} type="button">我已经保存</button></div>
+          </div>
+        </div>
+      )}
+
+      {selectedSubmission && (
+        <div className="account-submission-modal" role="dialog" aria-modal="true" aria-label="投稿详情">
+          <div>
+            <div className="account-submission-modal-heading">
+              <div><span>SUBMISSION DETAIL</span><h2>{selectedSubmission.displayName}</h2></div>
+              <span className={`account-status account-status--${selectedSubmission.status}`}>{submissionStatusLabels[selectedSubmission.status]}</span>
+            </div>
+            <dl>
+              <div><dt>投稿 ID</dt><dd>{selectedSubmission.id}</dd></div>
+              <div><dt>桌宠标识</dt><dd>{selectedSubmission.petKey}</dd></div>
+              <div><dt>投稿时间</dt><dd>{formatDate(selectedSubmission.createdAt)}</dd></div>
+              <div><dt>审核时间</dt><dd>{selectedSubmission.reviewedAt ? formatDate(selectedSubmission.reviewedAt) : "尚未审核"}</dd></div>
+              <div><dt>版本</dt><dd>v{selectedSubmission.version}</dd></div>
+              <div><dt>校验和</dt><dd title={selectedSubmission.sha256}>{selectedSubmission.sha256.slice(0, 16)}…</dd></div>
+            </dl>
+            <div className="account-review-note"><strong>审核说明</strong><p>{selectedSubmission.reviewNote || "暂无审核说明"}</p></div>
+            <div className="account-submission-modal-actions">
+              <button onClick={() => copySubmissionPrompt(selectedSubmission)} type="button">{selectedSubmission.status === "published" ? "复制安装指令" : "复制查询指令"}</button>
+              <button className="account-link-button" onClick={() => setSelectedSubmission(null)} type="button">关闭</button>
+            </div>
           </div>
         </div>
       )}

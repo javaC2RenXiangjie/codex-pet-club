@@ -189,6 +189,12 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   await expectStatus(normalizedBaseUrl, "/api/admin/backups", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/events", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/health", 401);
+  await expectStatus(normalizedBaseUrl, "/api/me/submissions", 401);
+  await expectStatus(
+    normalizedBaseUrl,
+    "/api/submissions/00000000-0000-4000-8000-000000000000",
+    401,
+  );
   await expectStatus(normalizedBaseUrl, "/api/pets", 415, { method: "POST" });
   await expectStatus(normalizedBaseUrl, "/api/pets", 401, {
     method: "POST",
