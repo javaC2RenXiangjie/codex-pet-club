@@ -186,6 +186,12 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     sizeBytes: packageBytes.length,
     updatedAt: "2026-07-19T00:00:00.000Z",
   };
+  const communityPet = {
+    ...publicPet,
+    id: "community-pet-0002",
+    petKey: "community-pet",
+    displayName: "Community Pet",
+  };
   const server = createServer((request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (url.pathname === "/admin") {
@@ -201,7 +207,9 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     } else if (url.pathname === "/api/pets" && request.method === "POST") {
       response.writeHead(415).end();
     } else if (url.pathname === "/api/pets") {
-      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ pets: [publicPet] }));
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+        pets: [publicPet, communityPet],
+      }));
     } else if (url.pathname === `/api/pets/${id}`) {
       response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ pet: publicPet }));
     } else if (url.pathname === `/api/pets/${id}/preview`) {
@@ -226,6 +234,7 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
       catalog: smokeCatalog,
     });
     assert.equal(result.pets[0].sha256, sha256);
+    assert.equal(result.livePets, 2);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

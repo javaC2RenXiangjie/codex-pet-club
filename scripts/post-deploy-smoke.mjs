@@ -155,8 +155,12 @@ export async function runSmoke({ baseUrl, catalog }) {
     headers: { accept: "application/json" },
   });
   const list = await listResponse.json();
-  if (!Array.isArray(list.pets) || list.pets.length !== expectedPets.length) {
-    fail(`/api/pets returned ${list.pets?.length ?? "invalid"} pets, expected ${expectedPets.length}`);
+  if (!Array.isArray(list.pets) || list.pets.length < expectedPets.length) {
+    fail(`/api/pets returned ${list.pets?.length ?? "invalid"} pets, expected at least ${expectedPets.length}`);
+  }
+  const listedIds = new Set(list.pets.map((pet) => pet.id));
+  if (listedIds.size !== list.pets.length) {
+    fail("/api/pets returned duplicate pet IDs");
   }
 
   for (const pet of expectedPets) {
@@ -198,6 +202,7 @@ export async function runSmoke({ baseUrl, catalog }) {
 
   return {
     baseUrl: normalizedBaseUrl,
+    livePets: list.pets.length,
     pets: expectedPets.map((pet) => ({
       id: pet.id,
       version: pet.release.version,
