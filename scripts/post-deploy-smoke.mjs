@@ -10,6 +10,8 @@ import { validateCatalog } from "./pet-release.mjs";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://codex-pet-club.renxiangjie.workers.dev";
 const userAgent = "Codex-Pet-Club-Release-Smoke/1.0";
+const retryDelays = [0, 5_000, 10_000, 20_000, 30_000];
+const retryableStatuses = new Set([404, 408, 425, 429, 500, 502, 503, 504]);
 
 const powershellRequestScript = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -70,6 +72,10 @@ try {
 
 function fail(message) {
   throw new Error(message);
+}
+
+function sleep(delay) {
+  return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 function publishedPets(catalog) {
@@ -144,12 +150,25 @@ async function request(baseUrl, pathname, options = {}) {
 }
 
 async function expectStatus(baseUrl, pathname, status, options) {
-  const response = await request(baseUrl, pathname, options);
-  if (response.status !== status) {
+  let lastError;
+  for (const [attempt, delay] of retryDelays.entries()) {
+    if (delay > 0) await sleep(delay);
+    let response;
+    try {
+      response = await request(baseUrl, pathname, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === retryDelays.length - 1) break;
+      continue;
+    }
+    if (response.status === status) return response;
     const detail = await response.text().catch(() => "");
-    fail(`${pathname} returned ${response.status}, expected ${status}: ${detail.slice(0, 300)}`);
+    lastError = new Error(
+      `${pathname} returned ${response.status}, expected ${status}: ${detail.slice(0, 300)}`,
+    );
+    if (!retryableStatuses.has(response.status)) throw lastError;
   }
-  return response;
+  throw lastError;
 }
 
 export async function runSmoke({ baseUrl, catalog, skillRelease }) {
