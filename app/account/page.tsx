@@ -35,7 +35,11 @@ type CreatorSubmission = {
   petKey: string;
   displayName: string;
   description: string;
+  author: string;
   license: string;
+  category: "character" | "animal" | "fantasy" | "robot" | "other";
+  tags: string[];
+  creatorId: string | null;
   status: SubmissionStatus;
   version: string;
   sha256: string;
@@ -280,6 +284,38 @@ export default function AccountPage() {
     }
   }
 
+  async function saveSubmissionMetadata() {
+    if (!selectedSubmission) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const data = await jsonRequest<{ submission: CreatorSubmission }>(
+        `/api/submissions/${selectedSubmission.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            metadata: {
+              displayName: selectedSubmission.displayName,
+              description: selectedSubmission.description,
+              license: selectedSubmission.license,
+              category: selectedSubmission.category,
+              tags: selectedSubmission.tags,
+            },
+          }),
+        },
+      );
+      setSubmissions((items) => items.map((item) => (
+        item.id === data.submission.id ? data.submission : item
+      )));
+      setSelectedSubmission(data.submission);
+      setMessage("作品展示信息已保存");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "展示信息保存失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="account-shell">
       <header className="site-header">
@@ -465,6 +501,66 @@ export default function AccountPage() {
               <div><dt>版本</dt><dd>v{selectedSubmission.version}</dd></div>
               <div><dt>校验和</dt><dd title={selectedSubmission.sha256}>{selectedSubmission.sha256.slice(0, 16)}…</dd></div>
             </dl>
+            <div className="account-metadata-editor">
+              <div className="account-metadata-editor-heading">
+                <div><strong>展示信息</strong><small>桌宠标识和文件不可在这里修改</small></div>
+                {selectedSubmission.status === "published" && selectedSubmission.creatorId && (
+                  <Link href={`/creators/${selectedSubmission.creatorId}`}>查看公开主页 ↗</Link>
+                )}
+              </div>
+              <label>
+                <span>展示名称</span>
+                <input
+                  maxLength={80}
+                  onChange={(event) => setSelectedSubmission((current) => current ? ({ ...current, displayName: event.target.value }) : current)}
+                  value={selectedSubmission.displayName}
+                />
+              </label>
+              <label>
+                <span>作品介绍</span>
+                <textarea
+                  maxLength={500}
+                  onChange={(event) => setSelectedSubmission((current) => current ? ({ ...current, description: event.target.value }) : current)}
+                  value={selectedSubmission.description}
+                />
+              </label>
+              <div className="account-metadata-editor-row">
+                <label>
+                  <span>分类</span>
+                  <select
+                    onChange={(event) => setSelectedSubmission((current) => current ? ({ ...current, category: event.target.value as CreatorSubmission["category"] }) : current)}
+                    value={selectedSubmission.category}
+                  >
+                    <option value="character">人物角色</option>
+                    <option value="animal">动物伙伴</option>
+                    <option value="fantasy">奇幻生物</option>
+                    <option value="robot">机器人</option>
+                    <option value="other">其他</option>
+                  </select>
+                </label>
+                <label>
+                  <span>许可证</span>
+                  <input
+                    maxLength={80}
+                    onChange={(event) => setSelectedSubmission((current) => current ? ({ ...current, license: event.target.value }) : current)}
+                    value={selectedSubmission.license}
+                  />
+                </label>
+              </div>
+              <label>
+                <span>标签（逗号分隔，最多 8 个）</span>
+                <input
+                  onChange={(event) => setSelectedSubmission((current) => current ? ({
+                    ...current,
+                    tags: event.target.value.split(/[,，]/u).map((tag) => tag.trim()).slice(0, 8),
+                  }) : current)}
+                  value={selectedSubmission.tags.join("，")}
+                />
+              </label>
+              <button disabled={busy} onClick={() => void saveSubmissionMetadata()} type="button">
+                {busy ? "保存中…" : "保存展示信息"}
+              </button>
+            </div>
             <div className="account-review-note"><strong>审核说明</strong><p>{selectedSubmission.reviewNote || "暂无审核说明"}</p></div>
             <div className="account-submission-modal-actions">
               <button onClick={() => copySubmissionPrompt(selectedSubmission)} type="button">{selectedSubmission.status === "published" ? "复制安装指令" : "复制查询指令"}</button>

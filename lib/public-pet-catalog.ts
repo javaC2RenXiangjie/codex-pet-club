@@ -49,6 +49,7 @@ export type PublicPet = {
   license: string;
   category: PetCategory;
   tags: string[];
+  creatorId: string | null;
   version: string;
   sha256: string;
   sizeBytes: number;
@@ -92,6 +93,7 @@ function resolvePublishedPet(pet: CatalogPet): PublicPetAsset | null {
     license: pet.license,
     category: normalizePetCategory(pet.category),
     tags: normalizePetTags(pet.tags),
+    creatorId: null,
     version: release.version,
     sha256: release.sha256,
     sizeBytes: release.sizeBytes,
@@ -111,6 +113,7 @@ export function toPublicPet(pet: PublicPetAsset): PublicPet {
     license: pet.license,
     category: pet.category,
     tags: pet.tags,
+    creatorId: pet.creatorId,
     version: pet.version,
     sha256: pet.sha256,
     sizeBytes: pet.sizeBytes,

@@ -207,6 +207,16 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   }
   await expectStatus(normalizedBaseUrl, "/admin", 200);
   await expectStatus(normalizedBaseUrl, "/api/admin/pets", 401);
+  await expectStatus(
+    normalizedBaseUrl,
+    "/api/admin/pets/00000000-0000-4000-8000-000000000000/metadata",
+    401,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ metadata: {} }),
+    },
+  );
   await expectStatus(normalizedBaseUrl, "/api/admin/backups", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/events", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/health", 401);
@@ -217,6 +227,16 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
     normalizedBaseUrl,
     "/api/submissions/00000000-0000-4000-8000-000000000000",
     401,
+  );
+  await expectStatus(
+    normalizedBaseUrl,
+    "/api/submissions/00000000-0000-4000-8000-000000000000",
+    401,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ metadata: {} }),
+    },
   );
   await expectStatus(normalizedBaseUrl, "/api/pets", 415, { method: "POST" });
   await expectStatus(normalizedBaseUrl, "/api/pets", 401, {
@@ -243,6 +263,32 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
     || !Array.isArray(list.tags)
   ) {
     fail("/api/pets omitted catalog pagination or discovery metadata");
+  }
+
+  const creatorPet = list.pets.find((pet) => typeof pet.creatorId === "string" && pet.creatorId);
+  if (creatorPet) {
+    const creatorResponse = await expectStatus(
+      normalizedBaseUrl,
+      `/api/creators/${creatorPet.creatorId}`,
+      200,
+      { headers: { accept: "application/json" } },
+    );
+    const creatorPayload = await creatorResponse.json();
+    const serializedCreator = JSON.stringify(creatorPayload);
+    if (/email|api.?key|credential/i.test(serializedCreator)) {
+      fail(`/api/creators/${creatorPet.creatorId} exposed private account fields`);
+    }
+    if (
+      creatorPayload.creator?.id !== creatorPet.creatorId
+      || !Array.isArray(creatorPayload.creator?.pets)
+      || !creatorPayload.creator.pets.some((pet) => pet.id === creatorPet.id)
+    ) {
+      fail(`/api/creators/${creatorPet.creatorId} returned inconsistent published work`);
+    }
+    const creatorPage = await expectStatus(normalizedBaseUrl, `/creators/${creatorPet.creatorId}`, 200);
+    if (!(await creatorPage.text()).includes(creatorPayload.creator.displayName)) {
+      fail(`/creators/${creatorPet.creatorId} did not render the creator profile`);
+    }
   }
 
   for (const pet of expectedPets) {

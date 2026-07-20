@@ -52,7 +52,7 @@ test("publishes the pinned automatic Skill update manifest", async () => {
 
   assert.equal(release.schemaVersion, 1);
   assert.equal(release.version, "0.4.3");
-  assert.equal(packageJson.version, "0.5.1");
+  assert.equal(packageJson.version, "0.5.2");
   assert.equal(release.sizeBytes, 20530);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(

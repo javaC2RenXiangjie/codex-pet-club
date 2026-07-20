@@ -59,7 +59,7 @@ test("migrates taxonomy fields and preserves them in backups", async () => {
   assert.match(schema, /petPublishedCategoryUpdatedIdx|pet_published_category_updated_idx/);
   assert.match(registry, /normalizePetTags/);
   assert.match(registry, /metadata\.category/);
-  assert.match(backup, /schemaVersion: 4/);
+  assert.match(backup, /schemaVersion: 5/);
   assert.match(restore, /SUBMISSION_COLUMNS_V4/);
   assert.match(detailPage, /generateMetadata/);
   assert.match(detailPage, /canonical/);

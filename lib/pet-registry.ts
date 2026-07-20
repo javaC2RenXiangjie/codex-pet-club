@@ -7,6 +7,7 @@ import {
   findPublicPetByKey,
   normalizePetCategory,
   normalizePetTags,
+  petCategories,
   type PetCategory,
 } from "./public-pet-catalog";
 import {
@@ -14,6 +15,7 @@ import {
   reviewNotificationStatement,
 } from "./review-notifications";
 import { getPetRegistryBindings } from "./runtime-bindings";
+import { ensureUserAuthSchema } from "./user-auth";
 
 const MAX_PACKAGE_BYTES = 32 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 96 * 1024 * 1024;
@@ -61,6 +63,7 @@ export type PublicPet = {
   license: string;
   category: PetCategory;
   tags: string[];
+  creatorId: string | null;
   version: string;
   sha256: string;
   sizeBytes: number;
@@ -140,6 +143,21 @@ export type ModerationEventPage = {
   totalPages: number;
 };
 
+export type SubmissionMetadataInput = {
+  displayName?: unknown;
+  description?: unknown;
+  license?: unknown;
+  category?: unknown;
+  tags?: unknown;
+};
+
+export type PublicCreatorProfile = {
+  id: string;
+  displayName: string;
+  joinedAt: string;
+  pets: PublicPet[];
+};
+
 export class RegistryError extends Error {
   constructor(
     message: string,
@@ -204,6 +222,18 @@ export async function ensureRegistrySchema(db: D1Database) {
     )`),
     db.prepare(
       "CREATE INDEX IF NOT EXISTS moderation_events_created_idx ON moderation_events(created_at DESC)",
+    ),
+    db.prepare(`CREATE TABLE IF NOT EXISTS submission_metadata_events (
+      id TEXT PRIMARY KEY,
+      submission_id TEXT NOT NULL,
+      actor_type TEXT NOT NULL CHECK (actor_type IN ('admin', 'creator')),
+      actor_user_id TEXT,
+      before_json TEXT NOT NULL,
+      after_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(
+      "CREATE INDEX IF NOT EXISTS submission_metadata_events_submission_idx ON submission_metadata_events(submission_id, created_at DESC)",
     ),
     db.prepare(`CREATE TABLE IF NOT EXISTS submission_rate_limits (
       fingerprint TEXT PRIMARY KEY,
@@ -270,6 +300,7 @@ function toPublicPet(row: PetRow): PublicPet {
     license: row.license,
     category: normalizePetCategory(row.category),
     tags: parseTags(row.tags),
+    creatorId: row.owner_user_id,
     version: COMMUNITY_VERSION,
     sha256: row.sha256,
     sizeBytes: row.size_bytes,
@@ -407,6 +438,140 @@ async function submissionRow(publicId: string): Promise<PetRow> {
   return row;
 }
 
+function metadataString(
+  value: unknown,
+  fallback: string,
+  label: string,
+  maximum: number,
+  allowEmpty = false,
+) {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string") throw new RegistryError(`${label} must be a string`);
+  const normalized = value.trim();
+  if ((!allowEmpty && !normalized) || normalized.length > maximum) {
+    throw new RegistryError(`${label} must contain ${allowEmpty ? `0-${maximum}` : `1-${maximum}`} characters`);
+  }
+  return normalized;
+}
+
+function normalizedMetadata(row: PetRow, input: SubmissionMetadataInput) {
+  const category = input.category === undefined
+    ? normalizePetCategory(row.category)
+    : typeof input.category === "string"
+      && petCategories.some((candidate) => candidate.id === input.category)
+      ? input.category as PetCategory
+      : null;
+  if (!category) throw new RegistryError("category is invalid");
+  if (input.tags !== undefined && !Array.isArray(input.tags)) {
+    throw new RegistryError("tags must be an array");
+  }
+  return {
+    displayName: metadataString(input.displayName, row.name, "displayName", 80),
+    description: metadataString(input.description, row.description, "description", 500, true),
+    license: metadataString(input.license, row.license, "license", 80),
+    category,
+    tags: input.tags === undefined ? parseTags(row.tags) : normalizePetTags(input.tags),
+  };
+}
+
+async function updateMetadata(
+  publicId: string,
+  input: SubmissionMetadataInput,
+  actor: { type: "admin" } | { type: "creator"; userId: string },
+) {
+  const id = safePublicId(publicId);
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const current = await submissionRow(id);
+  if (actor.type === "creator" && current.owner_user_id !== actor.userId) {
+    throw new RegistryError("Submission not found", 404);
+  }
+  const before = {
+    displayName: current.name,
+    description: current.description,
+    license: current.license,
+    category: normalizePetCategory(current.category),
+    tags: parseTags(current.tags),
+  };
+  const after = normalizedMetadata(current, input);
+  if (JSON.stringify(before) === JSON.stringify(after)) {
+    return actor.type === "creator"
+      ? toCreatorSubmission(current)
+      : toModerationSubmission(current);
+  }
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(
+      `UPDATE pet_submissions
+       SET name = ?, description = ?, license = ?, category = ?, tags = ?, updated_at = ?
+       WHERE id = ?`,
+    ).bind(
+      after.displayName,
+      after.description,
+      after.license,
+      after.category,
+      JSON.stringify(after.tags),
+      now,
+      id,
+    ),
+    db.prepare(
+      `INSERT INTO submission_metadata_events (
+        id, submission_id, actor_type, actor_user_id, before_json, after_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      crypto.randomUUID(),
+      id,
+      actor.type,
+      actor.type === "creator" ? actor.userId : null,
+      JSON.stringify(before),
+      JSON.stringify(after),
+      now,
+    ),
+  ]);
+  const updated = await submissionRow(id);
+  return actor.type === "creator"
+    ? toCreatorSubmission(updated)
+    : toModerationSubmission(updated);
+}
+
+export async function updateCreatorSubmissionMetadata(
+  publicId: string,
+  ownerUserId: string,
+  input: SubmissionMetadataInput,
+) {
+  return updateMetadata(publicId, input, { type: "creator", userId: ownerUserId });
+}
+
+export async function updateAdminSubmissionMetadata(
+  publicId: string,
+  input: SubmissionMetadataInput,
+) {
+  return updateMetadata(publicId, input, { type: "admin" });
+}
+
+export async function getPublicCreatorProfile(userId: string): Promise<PublicCreatorProfile> {
+  const id = userId.trim();
+  if (!/^[a-f0-9-]{36}$/iu.test(id)) throw new RegistryError("Creator not found", 404);
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  await ensureUserAuthSchema(db);
+  const user = await db.prepare(
+    `SELECT id, display_name, created_at
+     FROM users WHERE id = ? AND status = 'active' LIMIT 1`,
+  ).bind(id).first<{ id: string; display_name: string; created_at: string }>();
+  if (!user) throw new RegistryError("Creator not found", 404);
+  const result = await db.prepare(
+    `SELECT ${submissionColumns}
+     FROM pet_submissions
+     WHERE owner_user_id = ? AND status = 'published'
+     ORDER BY published_at DESC, updated_at DESC
+     LIMIT 100`,
+  ).bind(id).all<PetRow>();
+  const pets = (result.results ?? []).map(toPublicPet);
+  if (!pets.length) throw new RegistryError("Creator not found", 404);
+  return { id: user.id, displayName: user.display_name, joinedAt: user.created_at, pets };
+}
+
 export async function listModerationSubmissions({
   status,
   query = "",
@@ -487,6 +652,8 @@ export async function listModerationSubmissions({
       submission.description,
       submission.author,
       submission.license,
+      submission.category,
+      ...submission.tags,
       submission.sha256,
     ].some((value) => value.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
   });
