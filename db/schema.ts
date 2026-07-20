@@ -149,3 +149,19 @@ export const reviewNotifications = sqliteTable(
     index("review_notifications_submission_idx").on(table.submissionId, table.createdAt),
   ],
 );
+
+export const maintenanceRuns = sqliteTable(
+  "maintenance_runs",
+  {
+    id: text("id").primaryKey(),
+    status: text("status", {
+      enum: ["running", "succeeded", "failed"],
+    }).notNull(),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+    backupKey: text("backup_key"),
+    deletedRecords: integer("deleted_records").notNull().default(0),
+    error: text("error").notNull().default(""),
+  },
+  (table) => [index("maintenance_runs_started_idx").on(table.startedAt)],
+);

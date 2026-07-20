@@ -103,6 +103,14 @@ type RegistryHealth = {
     ageHours: number | null;
     scheduleUtc: string;
   };
+  maintenance: {
+    ok: boolean;
+    status: "running" | "succeeded" | "failed" | "missing";
+    latestAt: string | null;
+    deletedRecords: number;
+    error: string;
+    scheduleUtc: string;
+  };
 };
 
 type AdminOverview = {
@@ -348,6 +356,7 @@ export default function AdminPage() {
   const [backingUp, setBackingUp] = useState(false);
   const [verifyingBackup, setVerifyingBackup] = useState(false);
   const [backupVerification, setBackupVerification] = useState<BackupVerification | null>(null);
+  const [maintaining, setMaintaining] = useState(false);
 
   function applyOverview(overview: AdminOverview) {
     setSubmissions(overview.submissions);
@@ -548,6 +557,32 @@ export default function AdminPage() {
     }
   }
 
+  async function runMaintenance() {
+    setMaintaining(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/maintenance", {
+        method: "POST",
+        headers: adminHeaders(adminToken),
+      });
+      const data = (await response.json()) as {
+        status?: "succeeded";
+        cleanup?: { total: number };
+        error?: string;
+      };
+      if (!response.ok || data.status !== "succeeded") {
+        throw new Error(await apiError(response, "每日维护执行失败", data));
+      }
+      applyOverview(await fetchOverview(adminToken));
+      await refreshHealth();
+      setMessage(`备份恢复预检与数据清理已完成，共清理 ${data.cleanup?.total ?? 0} 条过期记录`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "每日维护执行失败");
+    } finally {
+      setMaintaining(false);
+    }
+  }
+
   async function submitReview() {
     if (!action) return;
     setProcessing(true);
@@ -744,7 +779,10 @@ export default function AdminPage() {
               <span>SERVICE STATUS</span>
               <h2>服务运行状态</h2>
             </div>
-            <button onClick={() => void refreshHealth()} type="button">↻ 重新检查</button>
+            <div className="admin-operation-buttons">
+              <button disabled={maintaining} onClick={() => void runMaintenance()} type="button">{maintaining ? "维护中…" : "运行每日维护"}</button>
+              <button onClick={() => void refreshHealth()} type="button">↻ 重新检查</button>
+            </div>
           </div>
           <div className="admin-health-grid">
             <article className={health?.database.ok ? "healthy" : "degraded"}>
@@ -761,6 +799,15 @@ export default function AdminPage() {
               <span>DAILY BACKUP</span>
               <strong>{health?.backup.ok ? "按时" : "需关注"}</strong>
               <small>{health?.backup.latestAt ? `最近 ${formatDate(health.backup.latestAt)} · 每日 11:00` : "尚未找到可用备份"}</small>
+            </article>
+            <article className={health?.maintenance.ok ? "healthy" : "degraded"}>
+              <span>DAILY MAINTENANCE</span>
+              <strong>{health?.maintenance.ok ? "已验证" : "需关注"}</strong>
+              <small>
+                {health?.maintenance.latestAt
+                  ? `${formatDate(health.maintenance.latestAt)} · 清理 ${health.maintenance.deletedRecords} 条`
+                  : "等待首次备份验证与数据清理"}
+              </small>
             </article>
           </div>
         </section>
