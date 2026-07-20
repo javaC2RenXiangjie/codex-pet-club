@@ -3,7 +3,7 @@ import {
   enforceSubmissionRateLimit,
   RegistryError,
 } from "../../../lib/pet-registry";
-import { listAllPublicPets } from "../../../lib/public-registry";
+import { listPublicPetCatalog } from "../../../lib/public-registry";
 import {
   apiKeyUser,
   UserAuthError,
@@ -29,10 +29,18 @@ function registryError(error: unknown) {
   return Response.json({ error: "Unexpected registry error" }, { status: 500 });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
     return Response.json(
-      { pets: await listAllPublicPets() },
+      await listPublicPetCatalog({
+        query: url.searchParams.get("query") ?? "",
+        category: url.searchParams.get("category") ?? "",
+        tag: url.searchParams.get("tag") ?? "",
+        sort: url.searchParams.get("sort") ?? "newest",
+        page: Number(url.searchParams.get("page") ?? "1"),
+        pageSize: Number(url.searchParams.get("pageSize") ?? "12"),
+      }),
       { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },
     );
   } catch (error) {

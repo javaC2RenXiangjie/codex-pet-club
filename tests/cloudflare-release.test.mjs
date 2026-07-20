@@ -7,7 +7,7 @@ test("publishes the two approved pets with stable IDs and checksums", async () =
     await readFile(new URL("../registry/catalog.json", import.meta.url), "utf8"),
   );
 
-  assert.equal(catalog.schemaVersion, 1);
+  assert.equal(catalog.schemaVersion, 2);
   assert.equal(catalog.pets.length, 2);
   assert.deepEqual(
     catalog.pets.map((pet) => [pet.id, pet.displayName, pet.status, pet.activeVersion]),
@@ -52,7 +52,7 @@ test("publishes the pinned automatic Skill update manifest", async () => {
 
   assert.equal(release.schemaVersion, 1);
   assert.equal(release.version, "0.4.3");
-  assert.equal(packageJson.version, "0.5.0");
+  assert.equal(packageJson.version, "0.5.1");
   assert.equal(release.sizeBytes, 20530);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(
@@ -117,7 +117,7 @@ test("ships valid WebP previews for every public pet", async () => {
 test("accepts moderated Skill submissions", async () => {
   const route = await readFile(new URL("../app/api/pets/route.ts", import.meta.url), "utf8");
 
-  assert.match(route, /listAllPublicPets/);
+  assert.match(route, /listPublicPetCatalog/);
   assert.match(route, /export async function POST/);
   assert.match(route, /createSubmission/);
   assert.match(route, /status: 202/);

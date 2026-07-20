@@ -9,13 +9,34 @@ import sqlite3
 from pathlib import Path
 
 
-SUBMISSION_COLUMNS = (
+SUBMISSION_COLUMNS_V3 = (
     "id",
     "slug",
     "name",
     "description",
     "author",
     "license",
+    "status",
+    "file_key",
+    "sha256",
+    "size_bytes",
+    "created_at",
+    "updated_at",
+    "published_at",
+    "reviewed_at",
+    "review_note",
+    "owner_user_id",
+)
+
+SUBMISSION_COLUMNS_V4 = (
+    "id",
+    "slug",
+    "name",
+    "description",
+    "author",
+    "license",
+    "category",
+    "tags",
     "status",
     "file_key",
     "sha256",
@@ -87,7 +108,7 @@ def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str,
 def run_drill(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     schema_version = payload.get("schemaVersion")
-    if schema_version not in (1, 2, 3) or payload.get("source") != "codex-pet-club-db":
+    if schema_version not in (1, 2, 3, 4) or payload.get("source") != "codex-pet-club-db":
         raise ValueError("Unsupported backup schema")
     submissions = payload.get("submissions")
     events = payload.get("moderationEvents")
@@ -107,6 +128,7 @@ def run_drill(path: Path) -> dict[str, object]:
               id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL,
               description TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
               license TEXT NOT NULL DEFAULT 'unspecified', status TEXT NOT NULL,
+              category TEXT NOT NULL DEFAULT 'other', tags TEXT NOT NULL DEFAULT '[]',
               file_key TEXT NOT NULL, sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL,
               created_at TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,
               reviewed_at TEXT, review_note TEXT NOT NULL DEFAULT '', owner_user_id TEXT
@@ -136,7 +158,8 @@ def run_drill(path: Path) -> dict[str, object]:
             """
         )
         with connection:
-            restore_rows(connection, "pet_submissions", SUBMISSION_COLUMNS, submissions)
+            submission_columns = SUBMISSION_COLUMNS_V4 if schema_version >= 4 else SUBMISSION_COLUMNS_V3
+            restore_rows(connection, "pet_submissions", submission_columns, submissions)
             restore_rows(connection, "moderation_events", EVENT_COLUMNS, events)
             restore_rows(connection, "users", USER_COLUMNS, users)
             restore_rows(connection, "user_api_keys", API_KEY_COLUMNS, api_keys)

@@ -10,6 +10,10 @@ export const petSubmissions = sqliteTable(
     description: text("description").notNull().default(""),
     author: text("author").notNull().default(""),
     license: text("license").notNull().default("unspecified"),
+    category: text("category", {
+      enum: ["character", "animal", "fantasy", "robot", "other"],
+    }).notNull().default("other"),
+    tags: text("tags").notNull().default("[]"),
     status: text("status", { enum: ["pending", "published", "unpublished", "rejected"] })
       .notNull()
       .default("pending"),
@@ -27,6 +31,11 @@ export const petSubmissions = sqliteTable(
     uniqueIndex("pet_published_slug_unique")
       .on(table.slug)
       .where(sql`${table.status} = 'published'`),
+    index("pet_published_category_updated_idx").on(
+      table.status,
+      table.category,
+      table.publishedAt,
+    ),
   ],
 );
 

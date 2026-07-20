@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PET_ACTIONS,
   PetSpritePlayer,
@@ -16,10 +16,30 @@ type RegistryPet = {
   description: string;
   author: string;
   license: string;
+  category: string;
+  tags: string[];
   version: string;
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
+};
+
+type CatalogResponse = {
+  pets: RegistryPet[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  categories: Array<{ id: string; label: string; count: number }>;
+  tags: Array<{ name: string; count: number }>;
+};
+
+const categoryLabels: Record<string, string> = {
+  character: "人物角色",
+  animal: "动物伙伴",
+  fantasy: "奇幻生物",
+  robot: "机器人",
+  other: "其他",
 };
 
 const registryPalettes = [
@@ -135,6 +155,11 @@ function RegistryPetDetail({
           </div>
           <p className="pet-detail-description">{pet.description}</p>
 
+          <div className="pet-detail-taxonomy">
+            <span>{categoryLabels[pet.category] ?? "其他"}</span>
+            {pet.tags.map((tag) => <span key={tag}>#{tag}</span>)}
+          </div>
+
           <dl className="pet-detail-metadata">
             <div><dt>作者</dt><dd>{pet.author || "Community"}</dd></div>
             <div><dt>许可证</dt><dd>{pet.license}</dd></div>
@@ -160,7 +185,10 @@ function RegistryPetDetail({
               <span>SKILL ONLY</span>
               <p>安装仍只通过官方 Skill 完成，网页不提供桌宠文件直链。</p>
             </div>
-            <button onClick={() => onCopy(pet)}>复制安装指令 ↗</button>
+            <div className="pet-detail-buttons">
+              <Link href={`/pets/${pet.id}`}>独立详情页</Link>
+              <button onClick={() => onCopy(pet)}>复制安装指令 ↗</button>
+            </div>
           </div>
         </div>
       </section>
@@ -172,39 +200,44 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const [registryPets, setRegistryPets] = useState<RegistryPet[]>([]);
+  const [category, setCategory] = useState("");
+  const [tag, setTag] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+  const [catalog, setCatalog] = useState<CatalogResponse>({
+    pets: [], page: 1, pageSize: 12, total: 0, totalPages: 1, categories: [], tags: [],
+  });
   const [selectedPet, setSelectedPet] = useState<RegistryPet | null>(null);
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
-    let active = true;
-    fetch("/api/pets", { headers: { accept: "application/json" } })
+    const controller = new AbortController();
+    const search = new URLSearchParams({ page: String(page), pageSize: "12", sort });
+    if (query.trim()) search.set("query", query.trim());
+    if (category) search.set("category", category);
+    if (tag) search.set("tag", tag);
+    const timer = window.setTimeout(() => fetch(`/api/pets?${search}`, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Registry returned ${response.status}`);
-        return response.json() as Promise<{ pets?: RegistryPet[] }>;
+        return response.json() as Promise<CatalogResponse>;
       })
       .then((data) => {
-        if (!active) return;
         setRegistryPets(Array.isArray(data.pets) ? data.pets : []);
+        setCatalog(data);
         setCatalogState("ready");
       })
-      .catch(() => {
-        if (active) setCatalogState("error");
-      });
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCatalogState("error");
+      }), 220);
     return () => {
-      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
     };
-  }, []);
-
-  const filteredPets = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return registryPets.filter((pet) =>
-      !keyword ||
-      [pet.id, pet.petKey, pet.displayName, pet.description, pet.author, pet.license]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword),
-    );
-  }, [query, registryPets]);
+  }, [query, category, tag, sort, page]);
 
   const featuredPet = registryPets[0] ?? null;
 
@@ -258,7 +291,7 @@ export default function Home() {
             </Link>
           </div>
           <div className="market-stats" aria-label="桌宠库数据">
-            <span><strong>{String(registryPets.length).padStart(2, "0")}</strong> 已发布桌宠</span>
+            <span><strong>{String(catalog.total).padStart(2, "0")}</strong> 当前结果</span>
             <span><strong>09</strong> 标准动作</span>
             <span><strong>SKILL</strong> 安装通道</span>
           </div>
@@ -303,28 +336,68 @@ export default function Home() {
 
         <div className="catalog-toolbar">
           <div className="filters" role="group" aria-label="按风格筛选">
-            <button className="active" aria-pressed="true">全部已发布</button>
+            <button
+              className={category === "" ? "active" : ""}
+              aria-pressed={category === ""}
+              onClick={() => { setCategory(""); setPage(1); }}
+            >全部 <span>{catalog.categories.reduce((sum, item) => sum + item.count, 0)}</span></button>
+            {catalog.categories.filter((item) => item.count > 0).map((item) => (
+              <button
+                className={category === item.id ? "active" : ""}
+                aria-pressed={category === item.id}
+                key={item.id}
+                onClick={() => { setCategory(item.id); setPage(1); }}
+              >{item.label} <span>{item.count}</span></button>
+            ))}
           </div>
-          <label className="search-box">
-            <span aria-hidden="true">⌕</span>
-            <span className="sr-only">搜索桌宠</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索名字、作者或桌宠 ID"
-            />
-            <kbd>⌘ K</kbd>
-          </label>
+          <div className="catalog-search-sort">
+            <label className="search-box">
+              <span aria-hidden="true">⌕</span>
+              <span className="sr-only">搜索桌宠</span>
+              <input
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); setPage(1); }}
+                placeholder="搜索名字、标签、作者或桌宠 ID"
+              />
+              <kbd>⌘ K</kbd>
+            </label>
+            <label className="catalog-sort">
+              <span className="sr-only">排序方式</span>
+              <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
+                <option value="newest">最新发布</option>
+                <option value="updated">最近更新</option>
+                <option value="name">名称排序</option>
+              </select>
+            </label>
+          </div>
         </div>
+
+        {catalog.tags.length > 0 && (
+          <div className="catalog-tags" aria-label="按标签筛选">
+            <button className={!tag ? "active" : ""} onClick={() => { setTag(""); setPage(1); }}>全部标签</button>
+            {catalog.tags.map((item) => (
+              <button
+                className={tag === item.name ? "active" : ""}
+                key={item.name}
+                onClick={() => { setTag(tag === item.name ? "" : item.name); setPage(1); }}
+              >#{item.name} <span>{item.count}</span></button>
+            ))}
+          </div>
+        )}
 
         <div className="catalog-notice">
           <span>SKILL ONLY</span>
           点击桌宠卡片查看完整详情与全部 9 种动作，再复制唯一 ID 交给 Codex 安装。
         </div>
 
-        {catalogState === "ready" && filteredPets.length > 0 ? (
+        <div className="catalog-result-line">
+          <span>共 {catalog.total} 只桌宠</span>
+          {(query || category || tag) && <button onClick={() => { setQuery(""); setCategory(""); setTag(""); setPage(1); }}>清除筛选</button>}
+        </div>
+
+        {catalogState === "ready" && registryPets.length > 0 ? (
           <div className="pet-grid">
-            {filteredPets.map((pet, index) => (
+            {registryPets.map((pet, index) => (
               <article className="pet-list-item" key={pet.id}>
                 <button
                   aria-label={`查看 ${pet.displayName} 的桌宠详情`}
@@ -336,19 +409,18 @@ export default function Home() {
                   <RegistryPetPreview pet={pet} index={index} />
                   <div className="pet-list-content">
                     <div className="pet-meta">
-                      <span className="category-pill">CODEX V2</span>
+                      <span className="category-pill">{categoryLabels[pet.category] ?? "其他"}</span>
                       <span className="download-count">9 ACTIONS</span>
                     </div>
                     <h3>{pet.displayName}</h3>
                     <p>{pet.description}</p>
                     <div className="tag-row">
-                      <span>{pet.license}</span>
-                      <span>{pet.petKey}</span>
-                      <span>v{pet.version}</span>
+                      {pet.tags.slice(0, 4).map((petTag) => <span key={petTag}>#{petTag}</span>)}
+                      {pet.tags.length === 0 && <span>{pet.license}</span>}
                     </div>
                     <div className="pet-list-footer">
                       <span>by {pet.author || "Community"}</span>
-                      <strong>查看全部动作 ↗</strong>
+                      <strong>查看详情与全部动作 ↗</strong>
                     </div>
                   </div>
                 </button>
@@ -360,8 +432,16 @@ export default function Home() {
             <span>{catalogState === "loading" ? "…" : "∅"}</span>
             <h3>{catalogState === "loading" ? "正在连接桌宠库" : catalogState === "error" ? "桌宠库暂时不可用" : query ? "没有匹配的桌宠" : "首批桌宠正在审核上架"}</h3>
             <p>{catalogState === "ready" ? "只有验证通过、确实能装进 Codex 的桌宠才会出现在这里。" : "稍后刷新页面重试。"}</p>
-            {query && <button onClick={() => setQuery("")}>清空搜索</button>}
+            {(query || category || tag) && <button onClick={() => { setQuery(""); setCategory(""); setTag(""); setPage(1); }}>清空筛选</button>}
           </div>
+        )}
+
+        {catalogState === "ready" && catalog.totalPages > 1 && (
+          <nav className="catalog-pagination" aria-label="桌宠库分页">
+            <button disabled={catalog.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>← 上一页</button>
+            <span>第 {catalog.page} / {catalog.totalPages} 页</span>
+            <button disabled={catalog.page >= catalog.totalPages} onClick={() => setPage((value) => Math.min(catalog.totalPages, value + 1))}>下一页 →</button>
+          </nav>
         )}
       </section>
 

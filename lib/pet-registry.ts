@@ -3,7 +3,12 @@ import type {
   D1PreparedStatement,
 } from "@cloudflare/workers-types";
 import { unzipSync } from "fflate";
-import { findPublicPetByKey } from "./public-pet-catalog";
+import {
+  findPublicPetByKey,
+  normalizePetCategory,
+  normalizePetTags,
+  type PetCategory,
+} from "./public-pet-catalog";
 import {
   ensureReviewNotificationSchema,
   reviewNotificationStatement,
@@ -33,6 +38,8 @@ type PetRow = {
   description: string;
   author: string;
   license: string;
+  category: PetCategory;
+  tags: string;
   status: SubmissionStatus;
   file_key: string;
   sha256: string;
@@ -52,6 +59,8 @@ export type PublicPet = {
   description: string;
   author: string;
   license: string;
+  category: PetCategory;
+  tags: string[];
   version: string;
   sha256: string;
   sizeBytes: number;
@@ -165,6 +174,8 @@ export async function ensureRegistrySchema(db: D1Database) {
       description TEXT NOT NULL DEFAULT '',
       author TEXT NOT NULL DEFAULT '',
       license TEXT NOT NULL DEFAULT 'unspecified',
+      category TEXT NOT NULL DEFAULT 'other',
+      tags TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'published', 'unpublished', 'rejected')),
       file_key TEXT NOT NULL,
       sha256 TEXT NOT NULL,
@@ -220,12 +231,33 @@ export async function ensureRegistrySchema(db: D1Database) {
   if (!names.has("owner_user_id")) {
     additions.push(db.prepare("ALTER TABLE pet_submissions ADD COLUMN owner_user_id TEXT"));
   }
+  if (!names.has("category")) {
+    additions.push(
+      db.prepare("ALTER TABLE pet_submissions ADD COLUMN category TEXT NOT NULL DEFAULT 'other'"),
+    );
+  }
+  if (!names.has("tags")) {
+    additions.push(
+      db.prepare("ALTER TABLE pet_submissions ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"),
+    );
+  }
   if (additions.length) {
     await db.batch(additions);
   }
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS pet_submissions_owner_idx ON pet_submissions(owner_user_id, created_at DESC)",
   ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS pet_published_category_updated_idx ON pet_submissions(status, category, published_at DESC)",
+  ).run();
+}
+
+function parseTags(value: string) {
+  try {
+    return normalizePetTags(JSON.parse(value));
+  } catch {
+    return [];
+  }
 }
 
 function toPublicPet(row: PetRow): PublicPet {
@@ -236,6 +268,8 @@ function toPublicPet(row: PetRow): PublicPet {
     description: row.description,
     author: row.author,
     license: row.license,
+    category: normalizePetCategory(row.category),
+    tags: parseTags(row.tags),
     version: COMMUNITY_VERSION,
     sha256: row.sha256,
     sizeBytes: row.size_bytes,
@@ -310,7 +344,7 @@ function moderationEventStatement(
     );
 }
 
-const submissionColumns = `id, slug, name, description, author, license, status,
+const submissionColumns = `id, slug, name, description, author, license, category, tags, status,
   file_key, sha256, size_bytes, created_at, updated_at, published_at,
   reviewed_at, review_note, owner_user_id`;
 
@@ -323,7 +357,7 @@ export async function listPublishedPets(): Promise<PublicPet[]> {
        FROM pet_submissions
        WHERE status = 'published'
        ORDER BY published_at DESC, updated_at DESC
-       LIMIT 100`,
+       LIMIT 1000`,
     )
     .all<PetRow>();
   return (result.results ?? []).map(toPublicPet);
@@ -795,6 +829,18 @@ function safeZipName(value: string) {
   return normalized;
 }
 
+function inferredCategory(name: string, slug: string): PetCategory {
+  const haystack = `${name} ${slug}`.toLocaleLowerCase("zh-CN");
+  if (/(cat|kitty|kitten|duck|owl|dog|fox|bird|猫|鸭|鸮|狗|狐)/i.test(haystack)) {
+    return "animal";
+  }
+  if (/(robot|bot|mech|codex|stacky|机器人|机械)/i.test(haystack)) return "robot";
+  if (/(dragon|fireball|ghost|magic|fantasy|龙|火球|幽灵|魔法)/i.test(haystack)) {
+    return "fantasy";
+  }
+  return "character";
+}
+
 function readUint24(data: Uint8Array, offset: number) {
   return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16);
 }
@@ -1008,6 +1054,12 @@ export async function createSubmission(
     typeof metadata.license === "string"
       ? metadata.license.trim().slice(0, 80) || "unspecified"
       : "unspecified";
+  const categoryValue = metadata.category ?? decoded.manifest.category;
+  const normalizedCategory = normalizePetCategory(categoryValue);
+  const category = normalizedCategory === "other" && categoryValue !== "other"
+    ? inferredCategory(decoded.name, decoded.slug)
+    : normalizedCategory;
+  const tags = normalizePetTags(metadata.tags ?? decoded.manifest.tags);
   const { db, files } = bindings();
   await ensureRegistrySchema(db);
   if (findPublicPetByKey(decoded.slug)) {
@@ -1040,9 +1092,9 @@ export async function createSubmission(
   try {
     const submission = db.prepare(
         `INSERT INTO pet_submissions (
-          id, slug, name, description, author, license, status, file_key,
+          id, slug, name, description, author, license, category, tags, status, file_key,
           sha256, size_bytes, created_at, updated_at, published_at, owner_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL, ?)`,
       )
       .bind(
         id,
@@ -1051,6 +1103,8 @@ export async function createSubmission(
         description,
         author,
         license,
+        category,
+        JSON.stringify(tags),
         fileKey,
         sha256,
         bytes.byteLength,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "pets": [
     {
       "id": "063e4124-91e3-440d-9f3b-40034565a54f",
@@ -8,6 +8,8 @@
       "description": "一位穿黑金双凤中式礼服、捧着玫瑰、笑容灿烂的 3D Q版新郎官桌宠。",
       "author": "Community",
       "license": "unspecified",
+      "category": "character",
+      "tags": ["人物", "中式", "Q版", "3D"],
       "status": "published",
       "activeVersion": "1.0.0",
       "releases": [
@@ -35,6 +37,8 @@
       "description": "一位穿黑金双凤中式礼服、捧着红玫瑰、笑容灿烂的新郎官桌宠。",
       "author": "Community",
       "license": "unspecified",
+      "category": "character",
+      "tags": ["人物", "中式", "Q版", "像素"],
       "status": "published",
       "activeVersion": "1.0.0",
       "releases": [

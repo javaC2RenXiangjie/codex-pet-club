@@ -73,8 +73,8 @@ function assertSafeRelative(value, prefix, label) {
 }
 
 export function validateCatalog(catalog) {
-  if (!catalog || catalog.schemaVersion !== 1 || !Array.isArray(catalog.pets)) {
-    fail("registry/catalog.json must use schemaVersion 1 with a pets array");
+  if (!catalog || catalog.schemaVersion !== 2 || !Array.isArray(catalog.pets)) {
+    fail("registry/catalog.json must use schemaVersion 2 with a pets array");
   }
   const ids = new Set();
   const petKeys = new Set();
@@ -86,6 +86,16 @@ export function validateCatalog(catalog) {
     ids.add(pet.id);
     petKeys.add(pet.petKey);
     if (!pet.displayName || typeof pet.displayName !== "string") fail(`Missing displayName for ${pet.id}`);
+    if (!new Set(["character", "animal", "fantasy", "robot", "other"]).has(pet.category)) {
+      fail(`Invalid category for ${pet.id}: ${pet.category}`);
+    }
+    if (
+      !Array.isArray(pet.tags)
+      || pet.tags.length > 8
+      || pet.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.length > 24)
+    ) {
+      fail(`Invalid tags for ${pet.id}`);
+    }
     if (!new Set(["published", "unpublished"]).has(pet.status)) {
       fail(`Invalid status for ${pet.id}: ${pet.status}`);
     }
