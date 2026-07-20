@@ -253,3 +253,11 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+test("post-deploy smoke retries transient edge propagation failures", async () => {
+  const source = await readFile(new URL("../scripts/post-deploy-smoke.mjs", import.meta.url), "utf8");
+  assert.match(source, /retryDelays/);
+  assert.match(source, /retryableStatuses/);
+  assert.match(source, /404/);
+  assert.match(source, /503/);
+});

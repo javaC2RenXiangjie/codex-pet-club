@@ -71,6 +71,7 @@ test("publishes privacy, submission rules, scheduled smoke, and one-command rele
   assert.match(workflow, /cron: "30 1 \* \* \*"/);
   assert.match(workflow, /github\.event_name == 'workflow_dispatch'/);
   assert.match(release, /shell: useShell/);
+  assert.match(release, /run\(npmCommand, \["run", "smoke"\]\)/);
   assert.ok(release.indexOf("d1\", \"export") < release.indexOf("migrations\", \"apply"));
   assert.ok(release.indexOf("migrations\", \"apply") < release.indexOf("wrangler\", \"deploy"));
   assert.ok(release.indexOf("wrangler\", \"deploy") < release.indexOf("run\", \"smoke"));
