@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   PET_ACTIONS,
@@ -25,6 +25,24 @@ type Submission = {
   publishedAt: string | null;
   reviewedAt: string | null;
   reviewNote: string;
+  duplicateHints: {
+    hasDuplicates: boolean;
+    matches: Array<{
+      id: string;
+      petKey: string;
+      displayName: string;
+      status: ReviewStatus;
+      reasons: Array<"petKey" | "sha256">;
+    }>;
+  };
+};
+
+type SubmissionPage = AuditPage & {
+  counts: Record<ReviewStatus, number>;
+  duplicateTotal: number;
+  status: ReviewStatus | null;
+  query: string;
+  duplicatesOnly: boolean;
 };
 
 type ReviewAction = {
@@ -115,12 +133,39 @@ type RegistryHealth = {
 
 type AdminOverview = {
   submissions: Submission[];
+  submissionPage: SubmissionPage;
   events: ModerationEvent[];
   eventPage: AuditPage;
   backups: RegistryBackup[];
   notifications: ReviewNotification[];
   notificationPage: NotificationPage;
 };
+
+type ReviewCheckKey = "animation" | "content" | "rights" | "metadata";
+
+const reviewChecklist: Array<{
+  key: ReviewCheckKey;
+  label: string;
+  help: string;
+}> = [
+  { key: "animation", label: "动作与图集", help: "逐项预览主要动作，无错帧、裁切或闪烁" },
+  { key: "content", label: "内容与质量", help: "画面完整，内容适合公开展示" },
+  { key: "rights", label: "授权与来源", help: "作者、许可证和素材来源可以合理确认" },
+  { key: "metadata", label: "信息与标识", help: "名称、说明、作者和桌宠标识清晰一致" },
+];
+
+const commonRejectReasons = [
+  "动作图集不完整或播放异常",
+  "角色素材授权信息不足",
+  "桌宠标识与现有作品冲突",
+  "描述、作者或许可证信息不完整",
+  "桌宠包结构或版本规范不符合要求",
+  "内容不适合公开展示",
+];
+
+function emptyReviewChecklist(): Record<ReviewCheckKey, boolean> {
+  return { animation: false, content: false, rights: false, metadata: false };
+}
 
 const filters: Array<{ value: "all" | ReviewStatus; label: string }> = [
   { value: "pending", label: "待审核" },
@@ -263,13 +308,33 @@ function SpritePreview({ submission, token }: { submission: Submission; token: s
   );
 }
 
-async function fetchOverview(token: string): Promise<AdminOverview> {
-  const response = await fetch("/api/admin/pets", {
+type QueueCriteria = {
+  status?: ReviewStatus;
+  query?: string;
+  duplicatesOnly?: boolean;
+  page?: number;
+};
+
+async function fetchOverview(
+  token: string,
+  {
+    status = "pending",
+    query = "",
+    duplicatesOnly = false,
+    page = 1,
+  }: QueueCriteria = {},
+): Promise<AdminOverview> {
+  const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+  if (status) params.set("status", status);
+  if (query.trim()) params.set("query", query.trim());
+  if (duplicatesOnly) params.set("duplicates", "1");
+  const response = await fetch(`/api/admin/pets?${params}`, {
     headers: adminHeaders(token),
     cache: "no-store",
   });
   const data = (await response.json()) as {
     submissions?: Submission[];
+    submissionPage?: SubmissionPage;
     events?: ModerationEvent[];
     eventPage?: AuditPage;
     backups?: RegistryBackup[];
@@ -282,6 +347,17 @@ async function fetchOverview(token: string): Promise<AdminOverview> {
   }
   return {
     submissions: Array.isArray(data.submissions) ? data.submissions : [],
+    submissionPage: data.submissionPage ?? {
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 1,
+      counts: { pending: 0, published: 0, unpublished: 0, rejected: 0 },
+      duplicateTotal: 0,
+      status: status ?? null,
+      query,
+      duplicatesOnly,
+    },
     events: Array.isArray(data.events) ? data.events : [],
     eventPage: data.eventPage ?? { page: 1, pageSize: 6, total: 0, totalPages: 1 },
     backups: Array.isArray(data.backups) ? data.backups : [],
@@ -324,6 +400,17 @@ async function fetchEvents(
 
 export default function AdminPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissionPage, setSubmissionPage] = useState<SubmissionPage>({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+    counts: { pending: 0, published: 0, unpublished: 0, rejected: 0 },
+    duplicateTotal: 0,
+    status: "pending",
+    query: "",
+    duplicatesOnly: false,
+  });
   const [events, setEvents] = useState<ModerationEvent[]>([]);
   const [backups, setBackups] = useState<RegistryBackup[]>([]);
   const [notifications, setNotifications] = useState<ReviewNotification[]>([]);
@@ -346,12 +433,18 @@ export default function AdminPage() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [health, setHealth] = useState<RegistryHealth | null>(null);
   const [filter, setFilter] = useState<"all" | ReviewStatus>("pending");
+  const [queueQuery, setQueueQuery] = useState("");
+  const [duplicateOnly, setDuplicateOnly] = useState(false);
+  const [queueLoading, setQueueLoading] = useState(false);
   const [state, setState] = useState<"auth" | "loading" | "ready" | "error">("auth");
   const [adminToken, setAdminToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [message, setMessage] = useState("");
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [reviewChecks, setReviewChecks] = useState<Record<ReviewCheckKey, boolean>>(
+    emptyReviewChecklist,
+  );
   const [processing, setProcessing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [verifyingBackup, setVerifyingBackup] = useState(false);
@@ -360,6 +453,7 @@ export default function AdminPage() {
 
   function applyOverview(overview: AdminOverview) {
     setSubmissions(overview.submissions);
+    setSubmissionPage(overview.submissionPage);
     setEvents(overview.events);
     setEventPage(overview.eventPage);
     setBackups(overview.backups);
@@ -378,7 +472,12 @@ export default function AdminPage() {
   async function loadOverview() {
     setState("loading");
     try {
-      applyOverview(await fetchOverview(adminToken));
+      applyOverview(await fetchOverview(adminToken, {
+        status: filter === "all" ? undefined : filter,
+        query: queueQuery,
+        duplicatesOnly,
+        page: submissionPage.page,
+      }));
       await refreshHealth(adminToken);
       setState("ready");
     } catch (error) {
@@ -427,7 +526,11 @@ export default function AdminPage() {
     setMessage("");
     try {
       const [overview, nextHealth] = await Promise.all([
-        fetchOverview(nextToken),
+        fetchOverview(nextToken, {
+          status: filter === "all" ? undefined : filter,
+          query: queueQuery,
+          duplicatesOnly,
+        }),
         fetchHealth(nextToken),
       ]);
       setAdminToken(nextToken);
@@ -444,6 +547,17 @@ export default function AdminPage() {
   function signOut() {
     setAdminToken("");
     setSubmissions([]);
+    setSubmissionPage({
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 1,
+      counts: { pending: 0, published: 0, unpublished: 0, rejected: 0 },
+      duplicateTotal: 0,
+      status: "pending",
+      query: "",
+      duplicatesOnly: false,
+    });
     setEvents([]);
     setEventPage({ page: 1, pageSize: 6, total: 0, totalPages: 1 });
     setBackups([]);
@@ -451,31 +565,47 @@ export default function AdminPage() {
     setNotificationPage({ page: 1, pageSize: 20, total: 0, totalPages: 1, status: null });
     setHealth(null);
     setBackupVerification(null);
+    setFilter("pending");
+    setQueueQuery("");
+    setDuplicateOnly(false);
     setState("auth");
     setMessage("");
   }
 
-  const counts = useMemo(
-    () => ({
-      pending: submissions.filter((item) => item.status === "pending").length,
-      published: submissions.filter((item) => item.status === "published").length,
-      unpublished: submissions.filter((item) => item.status === "unpublished").length,
-      rejected: submissions.filter((item) => item.status === "rejected").length,
-    }),
-    [submissions],
-  );
-
-  const visibleSubmissions = useMemo(
-    () =>
-      filter === "all"
-        ? submissions
-        : submissions.filter((item) => item.status === filter),
-    [filter, submissions],
-  );
+  const counts = submissionPage.counts;
+  const visibleSubmissions = submissions;
 
   function openReview(submission: Submission, status: ReviewAction["status"]) {
-    setReviewNote("");
+    setReviewNote(
+      status === "published"
+        ? "动作预览、内容、授权与元数据检查通过"
+        : "",
+    );
+    setReviewChecks(emptyReviewChecklist());
     setAction({ submission, status });
+  }
+
+  async function loadQueue(
+    page = 1,
+    nextFilter = filter,
+    nextQuery = queueQuery,
+    nextDuplicateOnly = duplicateOnly,
+  ) {
+    setQueueLoading(true);
+    setMessage("");
+    try {
+      const overview = await fetchOverview(adminToken, {
+        status: nextFilter === "all" ? undefined : nextFilter,
+        query: nextQuery,
+        duplicatesOnly: nextDuplicateOnly,
+        page,
+      });
+      applyOverview(overview);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "审核队列加载失败");
+    } finally {
+      setQueueLoading(false);
+    }
   }
 
   async function loadEvents(
@@ -573,7 +703,12 @@ export default function AdminPage() {
       if (!response.ok || data.status !== "succeeded") {
         throw new Error(await apiError(response, "每日维护执行失败", data));
       }
-      applyOverview(await fetchOverview(adminToken));
+      applyOverview(await fetchOverview(adminToken, {
+        status: filter === "all" ? undefined : filter,
+        query: queueQuery,
+        duplicatesOnly,
+        page: submissionPage.page,
+      }));
       await refreshHealth();
       setMessage(`备份恢复预检与数据清理已完成，共清理 ${data.cleanup?.total ?? 0} 条过期记录`);
     } catch (error) {
@@ -585,13 +720,28 @@ export default function AdminPage() {
 
   async function submitReview() {
     if (!action) return;
+    if (
+      action.status === "published" &&
+      !reviewChecklist.every((item) => reviewChecks[item.key])
+    ) {
+      setMessage("通过前请完成全部审核清单");
+      return;
+    }
+    if (action.status !== "published" && !reviewNote.trim()) {
+      setMessage("拒绝或下架时必须填写原因");
+      return;
+    }
     setProcessing(true);
     setMessage("");
     try {
       const response = await fetch(`/api/admin/pets/${action.submission.id}`, {
         method: "PATCH",
         headers: adminHeaders(adminToken, true),
-        body: JSON.stringify({ status: action.status, reviewNote }),
+        body: JSON.stringify({
+          status: action.status,
+          reviewNote,
+          checklist: reviewChecks,
+        }),
       });
       const data = (await response.json()) as {
         submission?: Submission;
@@ -650,6 +800,8 @@ export default function AdminPage() {
       });
       setAction(null);
       setReviewNote("");
+      setReviewChecks(emptyReviewChecklist());
+      void loadQueue(submissionPage.page);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "审核操作失败");
     } finally {
@@ -686,6 +838,15 @@ export default function AdminPage() {
       setRetryingNotification("");
     }
   }
+
+  const approvalChecklistComplete = reviewChecklist.every(
+    (item) => reviewChecks[item.key],
+  );
+  const reviewReady = Boolean(action) && (
+    action?.status === "published"
+      ? approvalChecklistComplete
+      : Boolean(reviewNote.trim())
+  );
 
   return (
     <main className="admin-shell">
@@ -955,12 +1116,48 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <form
+            className="admin-queue-search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void loadQueue(1);
+            }}
+          >
+            <label>
+              <span>搜索投稿</span>
+              <input
+                onChange={(event) => setQueueQuery(event.target.value)}
+                placeholder="名称、作者、桌宠标识、投稿 ID 或 SHA-256"
+                value={queueQuery}
+              />
+            </label>
+            <label className="admin-duplicate-toggle">
+              <input
+                checked={duplicateOnly}
+                onChange={(event) => {
+                  const nextDuplicateOnly = event.target.checked;
+                  setDuplicateOnly(nextDuplicateOnly);
+                  void loadQueue(1, filter, queueQuery, nextDuplicateOnly);
+                }}
+                type="checkbox"
+              />
+              <span>只看历史重复</span>
+              <strong>{submissionPage.duplicateTotal}</strong>
+            </label>
+            <button disabled={queueLoading} type="submit">
+              {queueLoading ? "查询中…" : "查询"}
+            </button>
+          </form>
+
           <div className="admin-filters" role="group" aria-label="审核状态筛选">
             {filters.map((item) => (
               <button
                 className={filter === item.value ? "active" : ""}
                 key={item.value}
-                onClick={() => setFilter(item.value)}
+                onClick={() => {
+                  setFilter(item.value);
+                  void loadQueue(1, item.value);
+                }}
               >
                 {item.label}
                 {item.value !== "all" && <span>{counts[item.value]}</span>}
@@ -970,17 +1167,17 @@ export default function AdminPage() {
 
           {message && <div className="admin-message" role="status">{message}</div>}
 
-          {state === "loading" && (
+          {(state === "loading" || queueLoading) && (
             <div className="admin-empty"><span>···</span><p>正在读取审核队列</p></div>
           )}
           {state === "error" && (
             <div className="admin-empty"><span>!</span><p>加载失败，请刷新重试</p></div>
           )}
-          {state === "ready" && visibleSubmissions.length === 0 && (
+          {state === "ready" && !queueLoading && visibleSubmissions.length === 0 && (
             <div className="admin-empty"><span>✓</span><p>这个分类目前没有桌宠</p></div>
           )}
 
-          <div className="admin-review-list">
+          {!queueLoading && <div className="admin-review-list">
             {visibleSubmissions.map((submission) => (
               <article
                 className="admin-review-card"
@@ -1012,6 +1209,26 @@ export default function AdminPage() {
                     <div><dt>包大小</dt><dd>{formatBytes(submission.sizeBytes)}</dd></div>
                     <div><dt>SHA-256</dt><dd title={submission.sha256}>{submission.sha256.slice(0, 16)}…</dd></div>
                   </dl>
+
+                  {submission.duplicateHints.hasDuplicates && (
+                    <aside className="admin-duplicate-warning" data-testid={`duplicate-${submission.id}`}>
+                      <strong>⚠ 发现历史相似投稿</strong>
+                      <p>请重点核对桌宠标识和文件内容，避免重复发布。</p>
+                      <ul>
+                        {submission.duplicateHints.matches.map((match) => (
+                          <li key={match.id}>
+                            <span>{match.displayName} · {statusLabel[match.status]}</span>
+                            <small>
+                              {match.reasons.includes("petKey") ? "相同标识" : ""}
+                              {match.reasons.length === 2 ? " + " : ""}
+                              {match.reasons.includes("sha256") ? "相同文件" : ""}
+                              {` · ${match.id.slice(0, 8)}`}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    </aside>
+                  )}
 
                   {submission.reviewNote && (
                     <p className="admin-review-note"><strong>审核备注：</strong>{submission.reviewNote}</p>
@@ -1049,7 +1266,29 @@ export default function AdminPage() {
                 </div>
               </article>
             ))}
-          </div>
+          </div>}
+
+          {!queueLoading && submissionPage.total > 0 && (
+            <div className="admin-queue-pagination">
+              <span>共 {submissionPage.total} 条 · 第 {submissionPage.page}/{submissionPage.totalPages} 页</span>
+              <div>
+                <button
+                  disabled={submissionPage.page <= 1}
+                  onClick={() => void loadQueue(submissionPage.page - 1)}
+                  type="button"
+                >
+                  上一页
+                </button>
+                <button
+                  disabled={submissionPage.page >= submissionPage.totalPages}
+                  onClick={() => void loadQueue(submissionPage.page + 1)}
+                  type="button"
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          )}
         </section>
           </>
         )}
@@ -1073,7 +1312,37 @@ export default function AdminPage() {
                   ? "下架后，它会立即从公开目录消失并停止新的 Skill 安装；包和操作记录仍会保留。"
                   : "拒绝后，它不会进入公开目录，但会保留提交记录和审核备注。"}
             </p>
-            <label htmlFor="review-note">审核备注（可选）</label>
+            <fieldset className="admin-review-checklist">
+              <legend>审核清单</legend>
+              {reviewChecklist.map((item) => (
+                <label key={item.key}>
+                  <input
+                    checked={reviewChecks[item.key]}
+                    onChange={(event) => setReviewChecks((current) => ({
+                      ...current,
+                      [item.key]: event.target.checked,
+                    }))}
+                    type="checkbox"
+                  />
+                  <span><strong>{item.label}</strong><small>{item.help}</small></span>
+                </label>
+              ))}
+            </fieldset>
+            {action.status !== "published" && (
+              <div className="admin-common-reasons">
+                <strong>常用原因</strong>
+                <div>
+                  {commonRejectReasons.map((reason) => (
+                    <button key={reason} onClick={() => setReviewNote(reason)} type="button">
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <label htmlFor="review-note">
+              审核备注{action.status === "published" ? "（可修改）" : "（必填）"}
+            </label>
             <textarea
               id="review-note"
               maxLength={500}
@@ -1086,12 +1355,19 @@ export default function AdminPage() {
               <button
                 className={action.status === "published" ? "admin-approve" : "admin-reject-confirm"}
                 data-testid="confirm-review"
-                disabled={processing}
+                disabled={processing || !reviewReady}
                 onClick={() => void submitReview()}
               >
                 {processing ? "处理中…" : action.status === "published" ? "确认通过并公开" : action.status === "unpublished" ? "确认下架" : "确认拒绝"}
               </button>
             </div>
+            {!reviewReady && (
+              <small className="admin-review-requirement">
+                {action.status === "published"
+                  ? "完成全部四项检查后才能公开。"
+                  : "选择常用原因或填写审核备注后才能继续。"}
+              </small>
+            )}
           </section>
         </div>
       )}

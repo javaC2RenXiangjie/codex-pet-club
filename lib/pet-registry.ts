@@ -65,6 +65,29 @@ export type ModerationSubmission = PublicPet & {
   reviewedAt: string | null;
   reviewNote: string;
   ownerUserId: string | null;
+  duplicateHints: {
+    hasDuplicates: boolean;
+    matches: Array<{
+      id: string;
+      petKey: string;
+      displayName: string;
+      status: SubmissionStatus;
+      reasons: Array<"petKey" | "sha256">;
+    }>;
+  };
+};
+
+export type ModerationSubmissionPage = {
+  submissions: ModerationSubmission[];
+  counts: Record<SubmissionStatus, number>;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  duplicateTotal: number;
+  status: SubmissionStatus | null;
+  query: string;
+  duplicatesOnly: boolean;
 };
 
 export type CreatorSubmission = Omit<ModerationSubmission, "ownerUserId"> & {
@@ -220,7 +243,13 @@ function toPublicPet(row: PetRow): PublicPet {
   };
 }
 
-function toModerationSubmission(row: PetRow): ModerationSubmission {
+function toModerationSubmission(
+  row: PetRow,
+  duplicateHints: ModerationSubmission["duplicateHints"] = {
+    hasDuplicates: false,
+    matches: [],
+  },
+): ModerationSubmission {
   return {
     ...toPublicPet(row),
     status: row.status,
@@ -229,6 +258,7 @@ function toModerationSubmission(row: PetRow): ModerationSubmission {
     reviewedAt: row.reviewed_at,
     reviewNote: row.review_note,
     ownerUserId: row.owner_user_id,
+    duplicateHints,
   };
 }
 
@@ -343,7 +373,19 @@ async function submissionRow(publicId: string): Promise<PetRow> {
   return row;
 }
 
-export async function listModerationSubmissions(): Promise<ModerationSubmission[]> {
+export async function listModerationSubmissions({
+  status,
+  query = "",
+  duplicatesOnly = false,
+  page = 1,
+  pageSize = 20,
+}: {
+  status?: SubmissionStatus;
+  query?: string;
+  duplicatesOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<ModerationSubmissionPage> {
   const { db } = bindings();
   await ensureRegistrySchema(db);
   const result = await db
@@ -358,10 +400,84 @@ export async function listModerationSubmissions(): Promise<ModerationSubmission[
            ELSE 3
          END,
          updated_at DESC
-       LIMIT 250`,
+       LIMIT 1000`,
     )
     .all<PetRow>();
-  return (result.results ?? []).map(toModerationSubmission);
+  const rows = result.results ?? [];
+  const byPetKey = new Map<string, PetRow[]>();
+  const bySha256 = new Map<string, PetRow[]>();
+  for (const row of rows) {
+    byPetKey.set(row.slug, [...(byPetKey.get(row.slug) ?? []), row]);
+    bySha256.set(row.sha256, [...(bySha256.get(row.sha256) ?? []), row]);
+  }
+  const submissions = rows.map((row) => {
+    const duplicateRows = new Map<string, PetRow>();
+    for (const candidate of byPetKey.get(row.slug) ?? []) {
+      if (candidate.id !== row.id) duplicateRows.set(candidate.id, candidate);
+    }
+    for (const candidate of bySha256.get(row.sha256) ?? []) {
+      if (candidate.id !== row.id) duplicateRows.set(candidate.id, candidate);
+    }
+    const matches = [...duplicateRows.values()].slice(0, 8).map((candidate) => ({
+      id: candidate.id,
+      petKey: candidate.slug,
+      displayName: candidate.name,
+      status: candidate.status,
+      reasons: [
+        ...(candidate.slug === row.slug ? ["petKey" as const] : []),
+        ...(candidate.sha256 === row.sha256 ? ["sha256" as const] : []),
+      ],
+    }));
+    return toModerationSubmission(row, {
+      hasDuplicates: matches.length > 0,
+      matches,
+    });
+  });
+  const counts: Record<SubmissionStatus, number> = {
+    pending: 0,
+    published: 0,
+    unpublished: 0,
+    rejected: 0,
+  };
+  for (const submission of submissions) counts[submission.status] += 1;
+  const safeQuery = query.trim().slice(0, 100);
+  const normalizedQuery = safeQuery.toLocaleLowerCase("zh-CN");
+  const filtered = submissions.filter((submission) => {
+    if (status && submission.status !== status) return false;
+    if (duplicatesOnly && !submission.duplicateHints.hasDuplicates) return false;
+    if (!normalizedQuery) return true;
+    return [
+      submission.id,
+      submission.petKey,
+      submission.displayName,
+      submission.description,
+      submission.author,
+      submission.license,
+      submission.sha256,
+    ].some((value) => value.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
+  });
+  const safePageSize = Math.min(
+    50,
+    Math.max(1, Math.floor(Number.isFinite(pageSize) ? pageSize : 20)),
+  );
+  const requestedPage = Math.max(1, Math.floor(Number.isFinite(page) ? page : 1));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / safePageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+  return {
+    submissions: filtered.slice(
+      (currentPage - 1) * safePageSize,
+      currentPage * safePageSize,
+    ),
+    counts,
+    page: currentPage,
+    pageSize: safePageSize,
+    total: filtered.length,
+    totalPages,
+    duplicateTotal: submissions.filter((submission) => submission.duplicateHints.hasDuplicates).length,
+    status: status ?? null,
+    query: safeQuery,
+    duplicatesOnly,
+  };
 }
 
 export async function listCreatorSubmissions(

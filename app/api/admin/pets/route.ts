@@ -2,6 +2,7 @@ import {
   listModerationSubmissions,
   queryModerationEvents,
   RegistryError,
+  type SubmissionStatus,
 } from "../../../../lib/pet-registry";
 import { listRegistryBackups } from "../../../../lib/registry-backup";
 import { adminOnlyResponse } from "../../../../lib/admin-auth";
@@ -13,8 +14,26 @@ export async function GET(request: Request) {
   const blocked = await adminOnlyResponse(request);
   if (blocked) return blocked;
   try {
-    const [submissions, eventPage, notificationPage] = await Promise.all([
-      listModerationSubmissions(),
+    const url = new URL(request.url);
+    const rawStatus = url.searchParams.get("status")?.trim() ?? "";
+    const statuses = new Set<SubmissionStatus>([
+      "pending",
+      "published",
+      "unpublished",
+      "rejected",
+    ]);
+    if (rawStatus && !statuses.has(rawStatus as SubmissionStatus)) {
+      throw new RegistryError("status must be pending, published, unpublished, or rejected");
+    }
+    const submissionPagePromise = listModerationSubmissions({
+      status: rawStatus ? rawStatus as SubmissionStatus : undefined,
+      query: url.searchParams.get("query") ?? "",
+      duplicatesOnly: ["1", "true"].includes(url.searchParams.get("duplicates") ?? ""),
+      page: Number(url.searchParams.get("page") ?? 1),
+      pageSize: Number(url.searchParams.get("pageSize") ?? 20),
+    });
+    const [submissionPage, eventPage, notificationPage] = await Promise.all([
+      submissionPagePromise,
       queryModerationEvents(),
       listReviewNotifications(),
     ]);
@@ -26,7 +45,8 @@ export async function GET(request: Request) {
     }
     return Response.json(
       {
-        submissions,
+        submissions: submissionPage.submissions,
+        submissionPage,
         events: eventPage.events,
         eventPage,
         notifications: notificationPage.notifications,
