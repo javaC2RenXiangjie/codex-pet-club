@@ -19,9 +19,22 @@ from mail_transport import load_mail_config  # noqa: E402
 class RecordingSender:
     def __init__(self) -> None:
         self.messages = []
+        self.review_messages = []
 
     def send(self, recipient: str, code: str, expires_in_minutes: int) -> None:
         self.messages.append((recipient, code, expires_in_minutes))
+
+    def send_review_result(
+        self,
+        recipient: str,
+        pet_name: str,
+        status: str,
+        review_note: str,
+        account_url: str,
+    ) -> None:
+        self.review_messages.append(
+            (recipient, pet_name, status, review_note, account_url)
+        )
 
 
 class MailServiceTest(unittest.TestCase):
@@ -121,6 +134,62 @@ class MailServiceTest(unittest.TestCase):
         self.assertEqual(status, 429)
         self.assertIn("Retry-After", headers)
         self.assertEqual(body["error"], "rate_limited")
+
+    def test_sends_only_the_fixed_review_result_payload(self) -> None:
+        account_url = "https://codex-pet-club.renxiangjie.workers.dev/account"
+        payload = {
+            "email": "Creator@Example.com",
+            "petName": "橘猫",
+            "status": "published",
+            "reviewNote": "图集检查通过",
+            "accountUrl": account_url,
+        }
+        status, _, body = self.request(
+            "POST",
+            "/v1/review-result",
+            payload,
+            self.settings.token,
+        )
+        self.assertEqual(status, 202)
+        self.assertTrue(body["ok"])
+        self.assertEqual(
+            self.sender.review_messages,
+            [("creator@example.com", "橘猫", "published", "图集检查通过", account_url)],
+        )
+
+        status, _, body = self.request(
+            "POST",
+            "/v1/review-result",
+            {**payload, "subject": "arbitrary mail is forbidden"},
+            self.settings.token,
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"], "invalid_request")
+
+    def test_rejects_invalid_review_result_fields(self) -> None:
+        valid = {
+            "email": "creator@example.com",
+            "petName": "Orange Kitty",
+            "status": "rejected",
+            "reviewNote": "",
+            "accountUrl": "https://codex-pet-club.renxiangjie.workers.dev/account",
+        }
+        cases = [
+            ({**valid, "petName": ""}, "invalid_pet_name"),
+            ({**valid, "status": "pending"}, "invalid_status"),
+            ({**valid, "reviewNote": "x" * 501}, "invalid_review_note"),
+            ({**valid, "accountUrl": "https://example.com"}, "invalid_account_url"),
+        ]
+        for payload, expected in cases:
+            with self.subTest(expected=expected):
+                status, _, body = self.request(
+                    "POST",
+                    "/v1/review-result",
+                    payload,
+                    self.settings.token,
+                )
+                self.assertEqual(status, 400)
+                self.assertEqual(body["error"], expected)
 
     def test_rejects_invalid_email_code_and_expiry(self) -> None:
         cases = [

@@ -18,10 +18,12 @@ from typing import Dict, Iterable, Optional, Tuple
 from mail_transport import SmtpVerificationSender, load_mail_config
 
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MAX_BODY_BYTES = 4096
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 CODE_PATTERN = re.compile(r"^\d{6}$")
+REVIEW_STATUSES = {"published", "rejected", "unpublished"}
+ACCOUNT_URL = "https://codex-pet-club.renxiangjie.workers.dev/account"
 LOGGER = logging.getLogger("codex-pet-mail-service")
 
 
@@ -135,7 +137,7 @@ class MailApplication:
             return False
         return hmac.compare_digest(authorization[len(prefix):].strip(), self.settings.token)
 
-    def deliver(self, payload: object) -> Tuple[int, Dict[str, object], Dict[str, str]]:
+    def deliver_verification(self, payload: object) -> Tuple[int, Dict[str, object], Dict[str, str]]:
         if not isinstance(payload, dict):
             return 400, {"error": "invalid_request"}, {}
         allowed = {"email", "code", "expiresInMinutes"}
@@ -154,11 +156,11 @@ class MailApplication:
 
         retry_after = self.rate_limiter.enforce([
             (
-                "recipient:" + email,
+                "verification-recipient:" + email,
                 self.settings.recipient_limit,
                 self.settings.recipient_window_seconds,
             ),
-            ("global", self.settings.global_limit, self.settings.global_window_seconds),
+            ("verification-global", self.settings.global_limit, self.settings.global_window_seconds),
         ])
         if retry_after > 0:
             return 429, {"error": "rate_limited"}, {"Retry-After": str(retry_after)}
@@ -182,6 +184,63 @@ class MailApplication:
             "event": "mail_accepted",
             "request_id": request_id,
             "recipient": mask_email(email),
+        }, ensure_ascii=False))
+        return 202, {"ok": True, "requestId": request_id}, {}
+
+    def deliver_review_result(self, payload: object) -> Tuple[int, Dict[str, object], Dict[str, str]]:
+        if not isinstance(payload, dict):
+            return 400, {"error": "invalid_request"}, {}
+        allowed = {"email", "petName", "status", "reviewNote", "accountUrl"}
+        if set(payload.keys()) != allowed:
+            return 400, {"error": "invalid_request"}, {}
+
+        email = str(payload.get("email", "")).strip().lower()
+        pet_name = str(payload.get("petName", "")).strip()
+        status = str(payload.get("status", "")).strip()
+        review_note = str(payload.get("reviewNote", "")).strip()
+        account_url = str(payload.get("accountUrl", "")).strip()
+        if len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
+            return 400, {"error": "invalid_email"}, {}
+        if not pet_name or len(pet_name) > 100:
+            return 400, {"error": "invalid_pet_name"}, {}
+        if status not in REVIEW_STATUSES:
+            return 400, {"error": "invalid_status"}, {}
+        if len(review_note) > 500:
+            return 400, {"error": "invalid_review_note"}, {}
+        if account_url != ACCOUNT_URL:
+            return 400, {"error": "invalid_account_url"}, {}
+
+        retry_after = self.rate_limiter.enforce([
+            (
+                "review-recipient:" + email,
+                self.settings.recipient_limit,
+                self.settings.recipient_window_seconds,
+            ),
+            ("review-global", self.settings.global_limit, self.settings.global_window_seconds),
+        ])
+        if retry_after > 0:
+            return 429, {"error": "rate_limited"}, {"Retry-After": str(retry_after)}
+
+        request_id = str(uuid.uuid4())
+        try:
+            self.sender.send_review_result(email, pet_name, status, review_note, account_url)
+        except Exception as error:
+            fields = {
+                "event": "review_mail_delivery_failed",
+                "request_id": request_id,
+                "recipient": mask_email(email),
+                "error_type": type(error).__name__,
+            }
+            if isinstance(error, smtplib.SMTPAuthenticationError):
+                fields["smtp_code"] = int(error.smtp_code)
+            LOGGER.error(json.dumps(fields, ensure_ascii=False))
+            return 502, {"error": "delivery_failed", "requestId": request_id}, {}
+
+        LOGGER.info(json.dumps({
+            "event": "review_mail_accepted",
+            "request_id": request_id,
+            "recipient": mask_email(email),
+            "status": status,
         }, ensure_ascii=False))
         return 202, {"ok": True, "requestId": request_id}, {}
 
@@ -218,7 +277,7 @@ def build_handler(application: MailApplication):
             self._send(200, {"ok": True, "service": "codex-pet-mail", "version": VERSION})
 
         def do_POST(self) -> None:
-            if self.path != "/v1/verification-code":
+            if self.path not in ("/v1/verification-code", "/v1/review-result"):
                 self._send(404, {"error": "not_found"})
                 return
             if not application.authorize(self.headers.get("Authorization", "")):
@@ -240,7 +299,10 @@ def build_handler(application: MailApplication):
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send(400, {"error": "invalid_json"})
                 return
-            status, response, headers = application.deliver(payload)
+            if self.path == "/v1/review-result":
+                status, response, headers = application.deliver_review_result(payload)
+            else:
+                status, response, headers = application.deliver_verification(payload)
             self._send(status, response, headers)
 
     return RequestHandler

@@ -51,6 +51,7 @@ type RegistryBackup = {
   events: number;
   users: number;
   apiKeys: number;
+  notifications: number;
 };
 
 type BackupVerification = {
@@ -61,6 +62,27 @@ type BackupVerification = {
   events: number;
   users: number;
   apiKeys: number;
+  notifications: number;
+};
+
+type ReviewNotification = {
+  id: string;
+  submissionId: string;
+  displayName: string;
+  recipient: string;
+  action: "published" | "rejected" | "unpublished";
+  status: "pending" | "sending" | "sent" | "failed";
+  attempts: number;
+  lastError: string;
+  requestId: string | null;
+  nextAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sentAt: string | null;
+};
+
+type NotificationPage = AuditPage & {
+  status: ReviewNotification["status"] | null;
 };
 
 type AuditPage = {
@@ -88,6 +110,8 @@ type AdminOverview = {
   events: ModerationEvent[];
   eventPage: AuditPage;
   backups: RegistryBackup[];
+  notifications: ReviewNotification[];
+  notificationPage: NotificationPage;
 };
 
 const filters: Array<{ value: "all" | ReviewStatus; label: string }> = [
@@ -110,6 +134,19 @@ const eventLabel: Record<ModerationEvent["action"], string> = {
   published: "审核通过",
   unpublished: "下架桌宠",
   rejected: "拒绝投稿",
+};
+
+const notificationActionLabel: Record<ReviewNotification["action"], string> = {
+  published: "审核通过",
+  rejected: "拒绝投稿",
+  unpublished: "下架桌宠",
+};
+
+const notificationStatusLabel: Record<ReviewNotification["status"], string> = {
+  pending: "等待发送",
+  sending: "正在发送",
+  sent: "已送达",
+  failed: "发送失败",
 };
 
 const eventFilters: Array<{
@@ -228,6 +265,8 @@ async function fetchOverview(token: string): Promise<AdminOverview> {
     events?: ModerationEvent[];
     eventPage?: AuditPage;
     backups?: RegistryBackup[];
+    notifications?: ReviewNotification[];
+    notificationPage?: NotificationPage;
     error?: string;
   };
   if (!response.ok) {
@@ -238,6 +277,14 @@ async function fetchOverview(token: string): Promise<AdminOverview> {
     events: Array.isArray(data.events) ? data.events : [],
     eventPage: data.eventPage ?? { page: 1, pageSize: 6, total: 0, totalPages: 1 },
     backups: Array.isArray(data.backups) ? data.backups : [],
+    notifications: Array.isArray(data.notifications) ? data.notifications : [],
+    notificationPage: data.notificationPage ?? {
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 1,
+      status: null,
+    },
   };
 }
 
@@ -271,6 +318,15 @@ export default function AdminPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [events, setEvents] = useState<ModerationEvent[]>([]);
   const [backups, setBackups] = useState<RegistryBackup[]>([]);
+  const [notifications, setNotifications] = useState<ReviewNotification[]>([]);
+  const [notificationPage, setNotificationPage] = useState<NotificationPage>({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+    status: null,
+  });
+  const [retryingNotification, setRetryingNotification] = useState("");
   const [eventPage, setEventPage] = useState<AuditPage>({
     page: 1,
     pageSize: 6,
@@ -298,6 +354,8 @@ export default function AdminPage() {
     setEvents(overview.events);
     setEventPage(overview.eventPage);
     setBackups(overview.backups);
+    setNotifications(overview.notifications);
+    setNotificationPage(overview.notificationPage);
   }
 
   async function refreshHealth(token = adminToken) {
@@ -380,6 +438,8 @@ export default function AdminPage() {
     setEvents([]);
     setEventPage({ page: 1, pageSize: 6, total: 0, totalPages: 1 });
     setBackups([]);
+    setNotifications([]);
+    setNotificationPage({ page: 1, pageSize: 20, total: 0, totalPages: 1, status: null });
     setHealth(null);
     setBackupVerification(null);
     setState("auth");
@@ -500,6 +560,7 @@ export default function AdminPage() {
       });
       const data = (await response.json()) as {
         submission?: Submission;
+        notification?: ReviewNotification | null;
         error?: string;
       };
       if (!response.ok || !data.submission) {
@@ -508,12 +569,28 @@ export default function AdminPage() {
       setSubmissions((items) =>
         items.map((item) => (item.id === data.submission?.id ? data.submission : item)),
       );
-      setMessage(
-        action.status === "published"
+      if (data.notification) {
+        setNotifications((items) => [
+          data.notification as ReviewNotification,
+          ...items.filter((item) => item.id !== data.notification?.id),
+        ].slice(0, 20));
+        setNotificationPage((current) => ({
+          ...current,
+          total: current.total + 1,
+          totalPages: Math.max(1, Math.ceil((current.total + 1) / current.pageSize)),
+        }));
+      }
+      const reviewMessage = action.status === "published"
           ? `${action.submission.displayName} 已通过并进入公开桌宠库`
           : action.status === "unpublished"
             ? `${action.submission.displayName} 已从公开桌宠库下架`
-            : `${action.submission.displayName} 已拒绝`,
+            : `${action.submission.displayName} 已拒绝`;
+      setMessage(
+        data.notification?.status === "sent"
+          ? `${reviewMessage}，通知邮件已发送`
+          : data.notification
+            ? `${reviewMessage}；邮件暂未送达，系统将自动重试，也可以在下方手动重发`
+            : `${reviewMessage}；该投稿未绑定创作者邮箱，无需发送通知`,
       );
       setEvents((items) => [
         {
@@ -545,6 +622,36 @@ export default function AdminPage() {
     }
   }
 
+  async function retryNotification(id: string) {
+    setRetryingNotification(id);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/notifications/${id}`, {
+        method: "POST",
+        headers: adminHeaders(adminToken),
+      });
+      const data = (await response.json()) as {
+        notification?: ReviewNotification;
+        error?: string;
+      };
+      if (!response.ok || !data.notification) {
+        throw new Error(await apiError(response, "通知重发失败", data));
+      }
+      setNotifications((items) => items.map((item) => (
+        item.id === id ? data.notification as ReviewNotification : item
+      )));
+      setMessage(
+        data.notification.status === "sent"
+          ? `${data.notification.displayName} 的审核邮件已发送`
+          : "邮件仍未送达，系统会继续按计划重试",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "通知重发失败");
+    } finally {
+      setRetryingNotification("");
+    }
+  }
+
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
@@ -559,6 +666,7 @@ export default function AdminPage() {
         <nav aria-label="管理导航">
           <a className="active" href="#queue"><span>◉</span>审核队列</a>
           <a href="#operations"><span>↺</span>操作与备份</a>
+          <a href="#notifications"><span>✉</span>邮件通知</a>
           <Link href="/"><span>↗</span>返回网站</Link>
         </nav>
 
@@ -677,6 +785,7 @@ export default function AdminPage() {
                 <div><dt>操作记录</dt><dd>{backups[0].events}</dd></div>
                 <div><dt>创作者账户</dt><dd>{backups[0].users}</dd></div>
                 <div><dt>Skill Key</dt><dd>{backups[0].apiKeys}</dd></div>
+                <div><dt>邮件通知</dt><dd>{backups[0].notifications}</dd></div>
                 <div><dt>文件大小</dt><dd>{formatBytes(backups[0].sizeBytes)}</dd></div>
               </dl>
             ) : (
@@ -685,7 +794,7 @@ export default function AdminPage() {
             {backupVerification && (
               <p className={backupVerification.restorable ? "admin-verify-ok" : "admin-verify-failed"}>
                 {backupVerification.restorable ? "✓ 恢复预检通过" : "! 恢复预检未通过"}
-                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.users} 个账户 · {backupVerification.apiKeys} 个 Key</small>
+                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.users} 个账户 · {backupVerification.apiKeys} 个 Key · {backupVerification.notifications} 条通知</small>
               </p>
             )}
           </article>
@@ -743,6 +852,44 @@ export default function AdminPage() {
               </div>
             </div>
           </article>
+        </section>
+
+        <section className="admin-notifications" id="notifications">
+          <div className="admin-operations-heading">
+            <div><span>EMAIL DELIVERY</span><h2>审核邮件</h2></div>
+            <strong>{notificationPage.total} 条记录</strong>
+          </div>
+          <p>审核完成后立即发送；临时失败会自动重试最多 5 次，也可以在这里人工重发。</p>
+          {notifications.length ? (
+            <ol className="admin-notification-list">
+              {notifications.map((notification) => (
+                <li key={notification.id}>
+                  <span className={`admin-notification-status admin-notification-status--${notification.status}`}>
+                    {notificationStatusLabel[notification.status]}
+                  </span>
+                  <div>
+                    <strong>{notificationActionLabel[notification.action]} · {notification.displayName}</strong>
+                    <small>{notification.recipient} · 已尝试 {notification.attempts} 次</small>
+                    {notification.lastError && <em>{notification.lastError}</em>}
+                  </div>
+                  <time dateTime={notification.sentAt ?? notification.updatedAt}>
+                    {formatDate(notification.sentAt ?? notification.updatedAt)}
+                  </time>
+                  {notification.status !== "sent" && notification.status !== "sending" ? (
+                    <button
+                      disabled={retryingNotification === notification.id}
+                      onClick={() => void retryNotification(notification.id)}
+                      type="button"
+                    >
+                      {retryingNotification === notification.id ? "发送中…" : "重新发送"}
+                    </button>
+                  ) : <span />}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>还没有审核邮件记录。下一次处理已绑定账户的投稿时会自动生成。</p>
+          )}
         </section>
 
         <section className="admin-queue" id="queue">

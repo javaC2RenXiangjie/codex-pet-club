@@ -2,6 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { createRegistryBackup } from "../lib/registry-backup";
+import { retryReviewNotifications } from "../lib/review-notifications";
 import { setPetRegistryBindings } from "../lib/runtime-bindings";
 
 interface Env {
@@ -28,6 +29,7 @@ interface ExecutionContext {
 
 interface ScheduledController {
   scheduledTime: number;
+  cron?: string;
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -60,7 +62,18 @@ const worker = {
     ctx: ExecutionContext,
   ) {
     setPetRegistryBindings(env);
-    ctx.waitUntil(createRegistryBackup(controller.scheduledTime));
+    if (controller.cron === "*/5 * * * *") {
+      ctx.waitUntil(retryReviewNotifications());
+      return;
+    }
+    if (controller.cron === "0 3 * * *") {
+      ctx.waitUntil(createRegistryBackup(controller.scheduledTime));
+      return;
+    }
+    ctx.waitUntil(Promise.all([
+      createRegistryBackup(controller.scheduledTime),
+      retryReviewNotifications(),
+    ]));
   },
 };
 

@@ -1,13 +1,13 @@
 # Codex Pet Club 邮件服务
 
-这是 Codex Pet Club 账户验证码的最小邮件服务。它可以读取服务器现有的
+这是 Codex Pet Club 账户验证码和审核结果通知的最小邮件服务。它可以读取服务器现有的
 `application-{profile}.yml` 中 `spring.mail` 配置，也可以读取只包含
 `host`、`port`、`username`、`password` 的独立 JSON 配置。SMTP 密码不会进入仓库、
 Cloudflare 或日志。
 
 ## 安全边界
 
-- 只开放 `POST /v1/verification-code`，服务端固定邮件标题和正文，不接受任意邮件内容。
+- 只开放 `POST /v1/verification-code` 和 `POST /v1/review-result`，服务端固定邮件标题和正文，不接受任意邮件内容。
 - 请求必须携带至少 32 字符的 Bearer Token。
 - 按收件人和全局维度进行第二层限流，限流库只保存 HMAC，不保存邮箱原文。
 - 业务日志只记录脱敏邮箱、请求 ID 和安全的错误类型，不记录验证码、Token 或 SMTP 密码。
@@ -27,7 +27,21 @@ Content-Type: application/json
   "code": "123456",
   "expiresInMinutes": 10
 }
+
+POST /v1/review-result
+Authorization: Bearer <MAIL_SERVICE_TOKEN>
+Content-Type: application/json
+
+{
+  "email": "creator@example.com",
+  "petName": "Orange Kitty",
+  "status": "published",
+  "reviewNote": "图集检查通过",
+  "accountUrl": "https://codex-pet-club.renxiangjie.workers.dev/account"
+}
 ```
+
+审核结果只接受 `published`、`rejected`、`unpublished` 三种状态和固定账户页链接；接口不接受自定义标题、正文或外部链接。
 
 成功发送返回 `202`。认证失败返回 `401`，第二层限流返回 `429`，SMTP 发送失败返回
 不包含内部配置的 `502`。
