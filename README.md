@@ -48,7 +48,7 @@ npm run db:generate
 npm run backup:drill -- path/to/backup.json
 npm run deploy
 npm run smoke
-npm run release:production -- --confirm
+node scripts/release-production.mjs --confirm
 ```
 
 `npm test` 会依次校验桌宠目录、执行生产构建并运行页面、API、迁移和备份恢复测试。

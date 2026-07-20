@@ -6,14 +6,16 @@ import process from "node:process";
 
 const confirm = process.argv.includes("--confirm");
 const ci = process.argv.includes("--ci");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+const npmCommand = "npm";
+const npxCommand = "npx";
+const useShell = process.platform === "win32";
 
 function run(command, args) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
     env: process.env,
     stdio: "inherit",
+    shell: useShell,
     windowsHide: true,
   });
   if (result.error || result.status !== 0) {
@@ -25,6 +27,7 @@ function capture(command, args) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
     encoding: "utf8",
+    shell: useShell,
     windowsHide: true,
   });
   if (result.error || result.status !== 0) {
