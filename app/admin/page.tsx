@@ -481,7 +481,7 @@ export default function AdminPage() {
       applyOverview(await fetchOverview(adminToken, {
         status: filter === "all" ? undefined : filter,
         query: queueQuery,
-        duplicatesOnly,
+        duplicatesOnly: duplicateOnly,
         page: submissionPage.page,
       }));
       await refreshHealth(adminToken);
@@ -535,7 +535,7 @@ export default function AdminPage() {
         fetchOverview(nextToken, {
           status: filter === "all" ? undefined : filter,
           query: queueQuery,
-          duplicatesOnly,
+          duplicatesOnly: duplicateOnly,
         }),
         fetchHealth(nextToken),
       ]);
@@ -751,7 +751,7 @@ export default function AdminPage() {
       applyOverview(await fetchOverview(adminToken, {
         status: filter === "all" ? undefined : filter,
         query: queueQuery,
-        duplicatesOnly,
+        duplicatesOnly: duplicateOnly,
         page: submissionPage.page,
       }));
       await refreshHealth();

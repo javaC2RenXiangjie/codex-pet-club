@@ -43,6 +43,15 @@ test("requires a consistent review checklist and reasoned negative decisions", a
   assert.match(styles, /admin-duplicate-warning/);
 });
 
+test("uses the duplicate-only state consistently during admin sign-in and refresh", async () => {
+  const admin = await readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+  const adminPage = admin.slice(admin.indexOf("export default function AdminPage"));
+  const undefinedShorthands = adminPage.match(/^\s+duplicatesOnly,\s*$/gmu) ?? [];
+
+  assert.equal(undefinedShorthands.length, 0);
+  assert.ok((admin.match(/duplicatesOnly: duplicateOnly/g) ?? []).length >= 3);
+});
+
 test("licenses system code separately from submitted pet artwork", async () => {
   const [license, packageJson, readme, terms, layout, socialImage] = await Promise.all([
     readFile(new URL("../LICENSE", import.meta.url), "utf8"),
@@ -54,7 +63,7 @@ test("licenses system code separately from submitted pet artwork", async () => {
   ]);
 
   assert.match(license, /^MIT License/);
-  assert.equal(packageJson.version, "0.5.2");
+  assert.equal(packageJson.version, "0.5.3");
   assert.equal(packageJson.license, "MIT");
   assert.match(readme, /用户投稿的桌宠、角色形象、图集/);
   assert.match(terms, /不自动覆盖用户投稿的角色形象/);
