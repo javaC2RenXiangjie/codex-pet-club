@@ -8,6 +8,8 @@ import { deliverLatestReviewNotification } from "../../../../../lib/review-notif
 
 export const dynamic = "force-dynamic";
 
+const approvalChecklistKeys = ["animation", "content", "rights", "metadata"] as const;
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -18,6 +20,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       status?: unknown;
       reviewNote?: unknown;
+      checklist?: unknown;
     };
     if (
       body.status !== "published" &&
@@ -28,6 +31,16 @@ export async function PATCH(
     }
     const { id } = await context.params;
     const reviewNote = typeof body.reviewNote === "string" ? body.reviewNote : "";
+    if (body.status === "published") {
+      const checklist = body.checklist && typeof body.checklist === "object"
+        ? body.checklist as Record<string, unknown>
+        : {};
+      if (!approvalChecklistKeys.every((key) => checklist[key] === true)) {
+        throw new RegistryError("Complete every approval checklist item before publishing");
+      }
+    } else if (!reviewNote.trim()) {
+      throw new RegistryError("A review reason is required when rejecting or unpublishing");
+    }
     const submission =
       body.status === "unpublished"
         ? await unpublishSubmission(id, reviewNote)
