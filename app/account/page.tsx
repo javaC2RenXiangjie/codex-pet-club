@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SiteFooter } from "../components/site-footer";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type AccountUser = {
@@ -107,6 +108,7 @@ export default function AccountPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<CreatorSubmission | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [acceptedRules, setAcceptedRules] = useState(false);
 
   const activeKeys = useMemo(
     () => keys.filter((item) => !item.revokedAt),
@@ -315,7 +317,8 @@ export default function AccountPage() {
                 <input id="display-name" maxLength={40} onChange={(event) => setDisplayName(event.target.value)} placeholder="已有账户可留空" value={displayName} />
                 <label htmlFor="email">邮箱</label>
                 <input autoComplete="email" id="email" onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required type="email" value={email} />
-                <button disabled={busy} type="submit">{busy ? "发送中…" : "发送验证码"}</button>
+                <label className="account-rule-consent"><input checked={acceptedRules} onChange={(event) => setAcceptedRules(event.target.checked)} required type="checkbox" /><span>我已阅读并同意<Link href="/terms">使用与投稿规则</Link>和<Link href="/privacy">隐私说明</Link></span></label>
+                <button disabled={busy || !acceptedRules} type="submit">{busy ? "发送中…" : "发送验证码"}</button>
               </form>
             ) : (
               <form onSubmit={verifyCode}>
@@ -432,6 +435,8 @@ export default function AccountPage() {
           {message && <p className="account-message account-message--dashboard">{message}</p>}
         </section>
       )}
+
+      <SiteFooter note="账户属于创作者，Key 始终由你控制。" />
 
       {newKey && (
         <div className="account-key-modal" role="dialog" aria-modal="true" aria-label="新 Skill Key">

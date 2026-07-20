@@ -52,7 +52,7 @@ test("publishes the pinned automatic Skill update manifest", async () => {
 
   assert.equal(release.schemaVersion, 1);
   assert.equal(release.version, "0.4.3");
-  assert.equal(packageJson.version, "0.4.4");
+  assert.equal(packageJson.version, "0.4.5");
   assert.equal(release.sizeBytes, 20530);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(
@@ -92,6 +92,7 @@ test("declares production R2 and D1 bindings", async () => {
   assert.match(vite, /bucket_name: "codex-pet-club-packages"/);
   assert.match(vite, /binding: "DB"/);
   assert.match(vite, /database_name: "codex-pet-club-db"/);
+  assert.match(vite, /migrations_dir: "\.\.\/\.\.\/migrations"/);
   assert.match(worker, /PET_FILES: R2Bucket/);
   assert.match(worker, /DB: D1Database/);
   assert.equal(JSON.parse(generatedWrangler).assets.binding, "ASSETS");
@@ -149,7 +150,7 @@ test("adds rate limits, audit events, unpublish, and R2 backups", async () => {
   assert.match(migration, /CREATE TABLE `moderation_events`/);
   assert.match(migration, /CREATE TABLE `submission_rate_limits`/);
   assert.match(worker, /async scheduled/);
-  assert.match(worker, /createRegistryBackup/);
+  assert.match(worker, /runDailyMaintenance/);
 });
 
 test("reports registry health, validates restores, and paginates the audit log", async () => {

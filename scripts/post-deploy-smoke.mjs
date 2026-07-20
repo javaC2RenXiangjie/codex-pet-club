@@ -157,6 +157,8 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   const expectedPets = publishedPets(validateCatalog(catalog));
   await expectStatus(normalizedBaseUrl, "/", 200);
   await expectStatus(normalizedBaseUrl, "/skill", 200);
+  await expectStatus(normalizedBaseUrl, "/privacy", 200);
+  await expectStatus(normalizedBaseUrl, "/terms", 200);
   let verifiedSkillVersion = null;
   if (skillRelease) {
     const manifestResponse = await expectStatus(normalizedBaseUrl, "/api/skill/version", 200, {
@@ -190,6 +192,7 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   await expectStatus(normalizedBaseUrl, "/api/admin/events", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/health", 401);
   await expectStatus(normalizedBaseUrl, "/api/admin/notifications", 401);
+  await expectStatus(normalizedBaseUrl, "/api/admin/maintenance", 401, { method: "POST" });
   await expectStatus(normalizedBaseUrl, "/api/me/submissions", 401);
   await expectStatus(
     normalizedBaseUrl,

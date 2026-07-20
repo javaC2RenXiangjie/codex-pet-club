@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SiteFooter } from "../components/site-footer";
 import { useState, useSyncExternalStore } from "react";
 
 const skillRepositoryUrl = "https://github.com/javaC2RenXiangjie/codex-pet-club-skill";
@@ -167,7 +168,7 @@ export default function SkillPage() {
         <div className="skill-command-copy">
           <span className="section-kicker">PUBLISH WITH CODEX</span>
           <h2>把本地桌宠交给 Skill 投稿</h2>
-          <p>先绑定创作者 Key，再把桌宠名称替换成你本地列表里的真实名称。Skill 会验证、打包并带着身份上传到审核队列；网页不提供手动上传入口。</p>
+          <p>先绑定创作者 Key，再把桌宠名称替换成你本地列表里的真实名称。Skill 会验证、打包并带着身份上传到审核队列；投稿即表示你同意<Link href="/terms">使用与投稿规则</Link>。</p>
           <button className="button button--dark" onClick={copyPublishPrompt}>复制投稿指令</button>
         </div>
         <div className="skill-command-card">
@@ -191,14 +192,7 @@ export default function SkillPage() {
         </div>
       </section>
 
-      <footer>
-        <Link className="brand brand--footer" href="/">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>官方 Skill</small></span>
-        </Link>
-        <p>安装自动化，浏览留给桌宠库。</p>
-        <div><Link href="/">返回桌宠库</Link><a href={skillRepositoryUrl} target="_blank" rel="noreferrer">GitHub 源码</a></div>
-      </footer>
+      <SiteFooter note="安装自动化，浏览留给桌宠库。" />
 
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>

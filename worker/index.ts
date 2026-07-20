@@ -1,8 +1,8 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { createRegistryBackup } from "../lib/registry-backup";
 import { retryReviewNotifications } from "../lib/review-notifications";
+import { runDailyMaintenance } from "../lib/maintenance";
 import { setPetRegistryBindings } from "../lib/runtime-bindings";
 
 interface Env {
@@ -67,11 +67,11 @@ const worker = {
       return;
     }
     if (controller.cron === "0 3 * * *") {
-      ctx.waitUntil(createRegistryBackup(controller.scheduledTime));
+      ctx.waitUntil(runDailyMaintenance(controller.scheduledTime));
       return;
     }
     ctx.waitUntil(Promise.all([
-      createRegistryBackup(controller.scheduledTime),
+      runDailyMaintenance(controller.scheduledTime),
       retryReviewNotifications(),
     ]));
   },

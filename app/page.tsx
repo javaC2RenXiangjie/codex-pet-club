@@ -7,6 +7,7 @@ import {
   PetSpritePlayer,
   type PetActionRow,
 } from "./components/pet-sprite-player";
+import { SiteFooter } from "./components/site-footer";
 
 type RegistryPet = {
   id: string;
@@ -373,14 +374,7 @@ export default function Home() {
         <Link className="button button--dark" href="/skill#publish">查看投稿方式 ↗</Link>
       </section>
 
-      <footer>
-        <a className="brand brand--footer" href="#top">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>桌宠开源俱乐部</small></span>
-        </a>
-        <p>给认真工作的人，一点可爱的陪伴。</p>
-        <div><a href="#catalog">桌宠目录</a><Link href="/skill">安装 Skill</Link><Link href="/skill#publish">投稿桌宠</Link></div>
-      </footer>
+      <SiteFooter />
 
       {selectedPet && (
         <RegistryPetDetail

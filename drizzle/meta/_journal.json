@@ -22,6 +22,13 @@
       "when": 1784509568753,
       "tag": "0003_review_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784511443897,
+      "tag": "0004_maintenance_runs",
+      "breakpoints": true
     }
   ]
 }

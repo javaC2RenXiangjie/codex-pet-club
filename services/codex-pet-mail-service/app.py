@@ -18,7 +18,7 @@ from typing import Dict, Iterable, Optional, Tuple
 from mail_transport import SmtpVerificationSender, load_mail_config
 
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 MAX_BODY_BYTES = 4096
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 CODE_PATTERN = re.compile(r"^\d{6}$")
@@ -97,6 +97,11 @@ class RateLimiter:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            longest_window = max((window for _, _, window in prepared), default=3600)
+            connection.execute(
+                "DELETE FROM rate_limits WHERE window_start < ?",
+                (timestamp - longest_window * 2,),
+            )
             retry_after = 0
             for key_hash, limit, window in prepared:
                 row = connection.execute(

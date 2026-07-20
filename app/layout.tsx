@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Codex Pet Club · 桌宠开源俱乐部",
-  description: "发现、下载、改造并分享 Codex 桌宠源文件。",
+  description: "发现、安装并分享经过审核的 Codex 动画桌宠。",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
