@@ -147,7 +147,7 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
   const sha256 = createHash("sha256").update(packageBytes).digest("hex");
   const id = "test-pet-0001";
   const smokeCatalog = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     pets: [
       {
         id,
@@ -156,6 +156,8 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
         description: "",
         author: "Tests",
         license: "MIT",
+        category: "robot",
+        tags: ["测试"],
         status: "published",
         activeVersion: "1.2.3",
         releases: [
@@ -181,6 +183,8 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     description: "",
     author: "Tests",
     license: "MIT",
+    category: "robot",
+    tags: ["测试"],
     version: "1.2.3",
     sha256,
     sizeBytes: packageBytes.length,
@@ -223,6 +227,12 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     } else if (url.pathname === "/api/pets") {
       response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
         pets: [publicPet, communityPet],
+        page: 1,
+        pageSize: 48,
+        total: 2,
+        totalPages: 1,
+        categories: [{ id: "robot", label: "机器人", count: 2 }],
+        tags: [{ name: "测试", count: 2 }],
       }));
     } else if (url.pathname === `/api/pets/${id}`) {
       response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ pet: publicPet }));
@@ -236,6 +246,8 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
         "x-pet-key": "test-pet",
         "x-pet-version": "1.2.3",
       }).end(packageBytes);
+    } else if (url.pathname === `/pets/${id}`) {
+      response.writeHead(200, { "content-type": "text/html" }).end(`<h1>${publicPet.displayName}</h1>`);
     } else {
       response.writeHead(200, { "content-type": "text/html" }).end("ok");
     }

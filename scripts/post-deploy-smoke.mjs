@@ -225,7 +225,7 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
     body: "--smoke--\r\n",
   });
 
-  const listResponse = await expectStatus(normalizedBaseUrl, "/api/pets", 200, {
+  const listResponse = await expectStatus(normalizedBaseUrl, "/api/pets?pageSize=48&sort=newest", 200, {
     headers: { accept: "application/json" },
   });
   const list = await listResponse.json();
@@ -236,6 +236,14 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
   if (listedIds.size !== list.pets.length) {
     fail("/api/pets returned duplicate pet IDs");
   }
+  if (
+    !Number.isInteger(list.total)
+    || !Number.isInteger(list.totalPages)
+    || !Array.isArray(list.categories)
+    || !Array.isArray(list.tags)
+  ) {
+    fail("/api/pets omitted catalog pagination or discovery metadata");
+  }
 
   for (const pet of expectedPets) {
     const listed = list.pets.find((candidate) => candidate.id === pet.id);
@@ -243,12 +251,19 @@ export async function runSmoke({ baseUrl, catalog, skillRelease }) {
     if (listed.version !== pet.release.version || listed.sha256 !== pet.release.sha256) {
       fail(`/api/pets returned stale release metadata for ${pet.id}`);
     }
+    if (typeof listed.category !== "string" || !Array.isArray(listed.tags)) {
+      fail(`/api/pets returned invalid taxonomy metadata for ${pet.id}`);
+    }
     const detailResponse = await expectStatus(normalizedBaseUrl, `/api/pets/${pet.id}`, 200, {
       headers: { accept: "application/json" },
     });
     const detail = await detailResponse.json();
     if (detail.pet?.version !== pet.release.version || detail.pet?.sha256 !== pet.release.sha256) {
       fail(`/api/pets/${pet.id} returned stale release metadata`);
+    }
+    const publicPage = await expectStatus(normalizedBaseUrl, `/pets/${pet.id}`, 200);
+    if (!(await publicPage.text()).includes(pet.displayName)) {
+      fail(`/pets/${pet.id} did not render the pet detail`);
     }
     const preview = await expectStatus(normalizedBaseUrl, `/api/pets/${pet.id}/preview`, 200);
     if (!/^image\/webp\b/i.test(preview.headers.get("content-type") ?? "")) {

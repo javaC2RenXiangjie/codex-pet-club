@@ -87,7 +87,7 @@ export async function createRegistryBackup(at = Date.now()): Promise<RegistryBac
   const createdAt = new Date(at).toISOString();
   const payload = JSON.stringify(
     {
-      schemaVersion: 3,
+      schemaVersion: 4,
       createdAt,
       source: "codex-pet-club-db",
       submissions,
@@ -188,7 +188,7 @@ export async function verifyRegistryBackup(
   const schemaVersion = Number(payload?.schemaVersion ?? 0);
   const schema = Boolean(
     payload
-      && (schemaVersion === 1 || schemaVersion === 2 || schemaVersion === 3)
+      && [1, 2, 3, 4].includes(schemaVersion)
       && payload.source === "codex-pet-club-db"
       && typeof payload.createdAt === "string"
       && Array.isArray(payload.submissions)
@@ -200,7 +200,13 @@ export async function verifyRegistryBackup(
     && hasUniqueStringIds(submissions)
     && hasUniqueStringIds(events)
     && submissions.every(
-      (row) => isRecord(row) && typeof row.status === "string" && typeof row.slug === "string",
+      (row) => isRecord(row)
+        && typeof row.status === "string"
+        && typeof row.slug === "string"
+        && (schemaVersion < 4 || (
+          typeof row.category === "string"
+          && typeof row.tags === "string"
+        )),
     )
     && events.every(
       (row) => isRecord(row) && typeof row.action === "string" && typeof row.submission_id === "string",
