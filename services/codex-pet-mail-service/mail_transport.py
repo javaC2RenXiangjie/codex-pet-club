@@ -112,3 +112,44 @@ class SmtpVerificationSender:
                 from_addr=self._config.username,
                 to_addrs=[recipient],
             )
+
+    def send_review_result(
+        self,
+        recipient: str,
+        pet_name: str,
+        status: str,
+        review_note: str,
+        account_url: str,
+    ) -> None:
+        labels = {
+            "published": ("审核通过", "已经通过审核并进入公开桌宠库。"),
+            "rejected": ("未通过审核", "本次投稿没有通过审核。"),
+            "unpublished": ("已下架", "已经从公开桌宠库下架。"),
+        }
+        subject_label, result_text = labels[status]
+        message = EmailMessage()
+        message["Subject"] = str(Header(f"Codex Pet Club：{pet_name}{subject_label}", "utf-8"))
+        message["From"] = formataddr((str(Header("Codex Pet Club", "utf-8")), self._config.username))
+        message["To"] = recipient
+        note_text = f"\n审核备注：{review_note}\n" if review_note else "\n"
+        message.set_content(
+            f"你的桌宠“{pet_name}”{result_text}\n"
+            f"{note_text}\n"
+            f"你可以在创作者中心查看投稿状态：{account_url}\n\n"
+            "这是一封系统通知邮件，请勿直接回复。",
+            subtype="plain",
+            charset="utf-8",
+            cte="base64",
+        )
+
+        with smtplib.SMTP_SSL(
+            self._config.host,
+            self._config.port,
+            timeout=self._timeout_seconds,
+        ) as server:
+            server.login(self._config.username, self._config.password)
+            server.send_message(
+                message,
+                from_addr=self._config.username,
+                to_addrs=[recipient],
+            )

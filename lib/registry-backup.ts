@@ -1,6 +1,7 @@
 import { ensureRegistrySchema, RegistryError } from "./pet-registry";
 import { getPetRegistryBindings } from "./runtime-bindings";
 import { ensureUserAuthSchema } from "./user-auth";
+import { ensureReviewNotificationSchema } from "./review-notifications";
 
 export type RegistryBackup = {
   key: string;
@@ -11,6 +12,7 @@ export type RegistryBackup = {
   events: number;
   users: number;
   apiKeys: number;
+  notifications: number;
 };
 
 export type RegistryBackupVerification = {
@@ -22,6 +24,7 @@ export type RegistryBackupVerification = {
   events: number;
   users: number;
   apiKeys: number;
+  notifications: number;
   checks: {
     checksum: boolean;
     schema: boolean;
@@ -68,26 +71,30 @@ export async function createRegistryBackup(at = Date.now()): Promise<RegistryBac
   const { db, files } = bindings();
   await ensureRegistrySchema(db);
   await ensureUserAuthSchema(db);
-  const [submissionsResult, eventsResult, usersResult, apiKeysResult] = await Promise.all([
+  await ensureReviewNotificationSchema(db);
+  const [submissionsResult, eventsResult, usersResult, apiKeysResult, notificationsResult] = await Promise.all([
     db.prepare("SELECT * FROM pet_submissions ORDER BY created_at ASC").all(),
     db.prepare("SELECT * FROM moderation_events ORDER BY created_at ASC").all(),
     db.prepare("SELECT * FROM users ORDER BY created_at ASC").all(),
     db.prepare("SELECT * FROM user_api_keys ORDER BY created_at ASC").all(),
+    db.prepare("SELECT * FROM review_notifications ORDER BY created_at ASC").all(),
   ]);
   const submissions = submissionsResult.results ?? [];
   const events = eventsResult.results ?? [];
   const users = usersResult.results ?? [];
   const apiKeys = apiKeysResult.results ?? [];
+  const notifications = notificationsResult.results ?? [];
   const createdAt = new Date(at).toISOString();
   const payload = JSON.stringify(
     {
-      schemaVersion: 2,
+      schemaVersion: 3,
       createdAt,
       source: "codex-pet-club-db",
       submissions,
       moderationEvents: events,
       users,
       userApiKeys: apiKeys,
+      reviewNotifications: notifications,
     },
     null,
     2,
@@ -105,6 +112,7 @@ export async function createRegistryBackup(at = Date.now()): Promise<RegistryBac
       events: String(events.length),
       users: String(users.length),
       apiKeys: String(apiKeys.length),
+      notifications: String(notifications.length),
     },
   });
   return {
@@ -116,6 +124,7 @@ export async function createRegistryBackup(at = Date.now()): Promise<RegistryBac
     events: events.length,
     users: users.length,
     apiKeys: apiKeys.length,
+    notifications: notifications.length,
   };
 }
 
@@ -137,6 +146,7 @@ export async function listRegistryBackups(): Promise<RegistryBackup[]> {
       events: Number(object.customMetadata?.events ?? "0"),
       users: Number(object.customMetadata?.users ?? "0"),
       apiKeys: Number(object.customMetadata?.apiKeys ?? "0"),
+      notifications: Number(object.customMetadata?.notifications ?? "0"),
     }))
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, 20);
@@ -174,15 +184,17 @@ export async function verifyRegistryBackup(
     : [];
   const users = Array.isArray(payload?.users) ? payload.users : [];
   const apiKeys = Array.isArray(payload?.userApiKeys) ? payload.userApiKeys : [];
+  const notifications = Array.isArray(payload?.reviewNotifications) ? payload.reviewNotifications : [];
   const schemaVersion = Number(payload?.schemaVersion ?? 0);
   const schema = Boolean(
     payload
-      && (schemaVersion === 1 || schemaVersion === 2)
+      && (schemaVersion === 1 || schemaVersion === 2 || schemaVersion === 3)
       && payload.source === "codex-pet-club-db"
       && typeof payload.createdAt === "string"
       && Array.isArray(payload.submissions)
       && Array.isArray(payload.moderationEvents)
-      && (schemaVersion === 1 || (Array.isArray(payload.users) && Array.isArray(payload.userApiKeys))),
+      && (schemaVersion === 1 || (Array.isArray(payload.users) && Array.isArray(payload.userApiKeys)))
+      && (schemaVersion < 3 || Array.isArray(payload.reviewNotifications)),
   );
   const records = schema
     && hasUniqueStringIds(submissions)
@@ -198,25 +210,37 @@ export async function verifyRegistryBackup(
       && hasUniqueStringIds(apiKeys)
       && users.every((row) => isRecord(row) && typeof row.email === "string")
       && apiKeys.every((row) => isRecord(row) && typeof row.user_id === "string" && typeof row.key_hash === "string")
+    ))
+    && (schemaVersion < 3 || (
+      hasUniqueStringIds(notifications)
+      && notifications.every((row) => (
+        isRecord(row)
+        && typeof row.submission_id === "string"
+        && typeof row.user_id === "string"
+        && typeof row.status === "string"
+      ))
     ));
   const expectedSubmissions = Number(object.customMetadata?.submissions ?? "-1");
   const expectedEvents = Number(object.customMetadata?.events ?? "-1");
   const expectedUsers = Number(object.customMetadata?.users ?? (schemaVersion === 1 ? "0" : "-1"));
   const expectedApiKeys = Number(object.customMetadata?.apiKeys ?? (schemaVersion === 1 ? "0" : "-1"));
+  const expectedNotifications = Number(object.customMetadata?.notifications ?? (schemaVersion < 3 ? "0" : "-1"));
   const counts = expectedSubmissions === submissions.length
     && expectedEvents === events.length
     && expectedUsers === users.length
-    && expectedApiKeys === apiKeys.length;
+    && expectedApiKeys === apiKeys.length
+    && expectedNotifications === notifications.length;
   let databaseReady = false;
   try {
     await ensureRegistrySchema(db);
     await ensureUserAuthSchema(db);
+    await ensureReviewNotificationSchema(db);
     const tables = await db
       .prepare(
-        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('pet_submissions', 'moderation_events', 'users', 'user_api_keys')",
+        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('pet_submissions', 'moderation_events', 'users', 'user_api_keys', 'review_notifications')",
       )
       .first<{ count: number }>();
-    databaseReady = Number(tables?.count ?? 0) === 4;
+    databaseReady = Number(tables?.count ?? 0) === 5;
   } catch {
     databaseReady = false;
   }
@@ -236,6 +260,7 @@ export async function verifyRegistryBackup(
     events: events.length,
     users: users.length,
     apiKeys: apiKeys.length,
+    notifications: notifications.length,
     checks,
   };
 }

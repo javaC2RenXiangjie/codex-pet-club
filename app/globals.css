@@ -495,6 +495,21 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
 .admin-operations dl > div { padding: 10px; background: #efede4; }
 .admin-operations dt { color: #858980; font: 700 8px var(--font-geist-mono), monospace; }
 .admin-operations dd { margin: 5px 0 0; font: 800 10px var(--font-geist-mono), monospace; }
+.admin-notifications { max-width: 1240px; margin: 0 auto 44px; padding: 22px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 4px 4px 0 rgba(30,36,33,.18); }
+.admin-notifications > .admin-operations-heading > strong { color: var(--muted); font: 800 10px var(--font-geist-mono), monospace; }
+.admin-notifications > p { margin: 14px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.admin-notification-list { display: grid; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; border-top: 1px solid #d7d5cb; }
+.admin-notification-list li { display: grid; grid-template-columns: 82px minmax(0,1fr) 110px 92px; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid #d7d5cb; }
+.admin-notification-list div { display: grid; gap: 4px; min-width: 0; }
+.admin-notification-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.admin-notification-list small,.admin-notification-list time { color: var(--muted); font: 700 9px var(--font-geist-mono), monospace; }
+.admin-notification-list em { color: #a3483c; font: 700 9px var(--font-geist-mono), monospace; }
+.admin-notification-list button { padding: 8px 10px; color: var(--ink); background: var(--lime); border: 1.5px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 850; }
+.admin-notification-list button:disabled { cursor: wait; opacity: .55; }
+.admin-notification-status { width: fit-content; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; font: 850 8px var(--font-geist-mono), monospace; }
+.admin-notification-status--sent { color: #216255; background: #d9efe5; }
+.admin-notification-status--failed { color: #8b342e; background: #f6d5cf; }
+.admin-notification-status--pending,.admin-notification-status--sending { color: #725812; background: #f5eab7; }
 .admin-event-list { display: grid; gap: 0; margin: 16px 0 0; padding: 0; list-style: none; }
 .admin-event-list li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px dashed #c4c5bc; }
 .admin-event-list strong, .admin-event-list small { display: block; }
@@ -712,6 +727,8 @@ footer button { border: 0; background: none; color: inherit; cursor: pointer; }
   .admin-stats { grid-template-columns: 1fr; gap: 10px; }
   .admin-stats article { min-height: 104px; }
   .admin-operations { grid-template-columns: 1fr; }
+  .admin-notification-list li { grid-template-columns: 78px minmax(0,1fr); }
+  .admin-notification-list time,.admin-notification-list li > button,.admin-notification-list li > span:last-child { grid-column: 2; }
   .admin-health-grid { grid-template-columns: 1fr; }
   .admin-audit-tools { grid-template-columns: 1fr; }
   .admin-queue-heading { align-items: flex-start; flex-direction: column; }

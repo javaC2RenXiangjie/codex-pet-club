@@ -59,6 +59,21 @@ API_KEY_COLUMNS = (
     "revoked_at",
 )
 
+NOTIFICATION_COLUMNS = (
+    "id",
+    "submission_id",
+    "user_id",
+    "action",
+    "status",
+    "attempts",
+    "last_error",
+    "request_id",
+    "next_attempt_at",
+    "created_at",
+    "updated_at",
+    "sent_at",
+)
+
 
 def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str, ...], rows: list[dict]) -> None:
     placeholders = ", ".join("?" for _ in columns)
@@ -72,15 +87,16 @@ def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str,
 def run_drill(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     schema_version = payload.get("schemaVersion")
-    if schema_version not in (1, 2) or payload.get("source") != "codex-pet-club-db":
+    if schema_version not in (1, 2, 3) or payload.get("source") != "codex-pet-club-db":
         raise ValueError("Unsupported backup schema")
     submissions = payload.get("submissions")
     events = payload.get("moderationEvents")
-    users = payload.get("users", []) if schema_version == 2 else []
-    api_keys = payload.get("userApiKeys", []) if schema_version == 2 else []
-    if not all(isinstance(rows, list) for rows in (submissions, events, users, api_keys)):
+    users = payload.get("users", []) if schema_version >= 2 else []
+    api_keys = payload.get("userApiKeys", []) if schema_version >= 2 else []
+    notifications = payload.get("reviewNotifications", []) if schema_version >= 3 else []
+    if not all(isinstance(rows, list) for rows in (submissions, events, users, api_keys, notifications)):
         raise ValueError("Backup rows are missing")
-    if not all(isinstance(row, dict) for row in [*submissions, *events, *users, *api_keys]):
+    if not all(isinstance(row, dict) for row in [*submissions, *events, *users, *api_keys, *notifications]):
         raise ValueError("Backup rows must be JSON objects")
 
     connection = sqlite3.connect(":memory:")
@@ -110,6 +126,13 @@ def run_drill(path: Path) -> dict[str, object]:
               prefix TEXT NOT NULL UNIQUE, key_hash TEXT NOT NULL UNIQUE,
               created_at TEXT NOT NULL, last_used_at TEXT, revoked_at TEXT
             );
+            CREATE TABLE review_notifications (
+              id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, user_id TEXT NOT NULL,
+              action TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL,
+              last_error TEXT NOT NULL DEFAULT '', request_id TEXT,
+              next_attempt_at INTEGER NOT NULL, created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL, sent_at TEXT
+            );
             """
         )
         with connection:
@@ -117,6 +140,7 @@ def run_drill(path: Path) -> dict[str, object]:
             restore_rows(connection, "moderation_events", EVENT_COLUMNS, events)
             restore_rows(connection, "users", USER_COLUMNS, users)
             restore_rows(connection, "user_api_keys", API_KEY_COLUMNS, api_keys)
+            restore_rows(connection, "review_notifications", NOTIFICATION_COLUMNS, notifications)
         restored_submissions = connection.execute(
             "SELECT COUNT(*) FROM pet_submissions"
         ).fetchone()[0]
@@ -125,11 +149,15 @@ def run_drill(path: Path) -> dict[str, object]:
         ).fetchone()[0]
         restored_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         restored_api_keys = connection.execute("SELECT COUNT(*) FROM user_api_keys").fetchone()[0]
+        restored_notifications = connection.execute(
+            "SELECT COUNT(*) FROM review_notifications"
+        ).fetchone()[0]
         if (
             restored_submissions != len(submissions)
             or restored_events != len(events)
             or restored_users != len(users)
             or restored_api_keys != len(api_keys)
+            or restored_notifications != len(notifications)
         ):
             raise RuntimeError("Restored row count does not match the backup")
         return {
@@ -139,6 +167,7 @@ def run_drill(path: Path) -> dict[str, object]:
             "events": restored_events,
             "users": restored_users,
             "apiKeys": restored_api_keys,
+            "notifications": restored_notifications,
             "target": "sqlite-memory",
         }
     finally:

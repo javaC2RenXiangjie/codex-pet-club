@@ -117,6 +117,7 @@ test("migrates the existing registry without recreating operational tables", asy
     new URL("drizzle/0000_abandoned_groot.sql", root),
     new URL("drizzle/0001_registry_operations.sql", root),
     new URL("drizzle/0002_user_accounts.sql", root),
+    new URL("drizzle/0003_review_notifications.sql", root),
   ];
   const script = String.raw`
 import json, sqlite3, sys
@@ -144,6 +145,7 @@ print(json.dumps({
     "email_login_codes",
     "moderation_events",
     "pet_submissions",
+    "review_notifications",
     "submission_rate_limits",
     "user_api_keys",
     "user_sessions",
@@ -155,14 +157,14 @@ print(json.dumps({
 
 test("backs up and restores account ownership with hashed keys", async () => {
   const backup = await readFile(new URL("../lib/registry-backup.ts", import.meta.url), "utf8");
-  assert.match(backup, /schemaVersion: 2/);
+  assert.match(backup, /schemaVersion: 3/);
   assert.match(backup, /users,/);
   assert.match(backup, /userApiKeys: apiKeys/);
 
   const directory = await mkdtemp(join(tmpdir(), "codex-pet-club-backup-"));
   const backupPath = join(directory, "backup.json");
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     source: "codex-pet-club-db",
     createdAt: "2026-07-19T00:00:00.000Z",
     submissions: [{
@@ -211,6 +213,20 @@ test("backs up and restores account ownership with hashed keys", async () => {
       last_used_at: null,
       revoked_at: null,
     }],
+    reviewNotifications: [{
+      id: "notification-1",
+      submission_id: "submission-1",
+      user_id: "user-1",
+      action: "published",
+      status: "sent",
+      attempts: 1,
+      last_error: "",
+      request_id: "mail-request-1",
+      next_attempt_at: 1784419200000,
+      created_at: "2026-07-19T00:00:00.000Z",
+      updated_at: "2026-07-19T00:01:00.000Z",
+      sent_at: "2026-07-19T00:01:00.000Z",
+    }],
   };
   try {
     await writeFile(backupPath, JSON.stringify(payload), "utf8");
@@ -225,6 +241,7 @@ test("backs up and restores account ownership with hashed keys", async () => {
     assert.equal(result.events, 1);
     assert.equal(result.users, 1);
     assert.equal(result.apiKeys, 1);
+    assert.equal(result.notifications, 1);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -11,7 +11,7 @@ const localBindingConfig = {
   workers_dev: true,
   preview_urls: false,
   triggers: {
-    crons: ["0 3 * * *"],
+    crons: ["0 3 * * *", "*/5 * * * *"],
   },
   assets: {
     binding: "ASSETS",

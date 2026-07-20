@@ -4,6 +4,7 @@ import {
   unpublishSubmission,
 } from "../../../../../lib/pet-registry";
 import { adminOnlyResponse } from "../../../../../lib/admin-auth";
+import { deliverLatestReviewNotification } from "../../../../../lib/review-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,14 @@ export async function PATCH(
       body.status === "unpublished"
         ? await unpublishSubmission(id, reviewNote)
         : await moderateSubmission(id, body.status, reviewNote);
+    let notification = null;
+    try {
+      notification = await deliverLatestReviewNotification(id, body.status);
+    } catch (error) {
+      console.error("Review completed but notification delivery could not start", error);
+    }
     return Response.json(
-      { submission },
+      { submission, notification },
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {

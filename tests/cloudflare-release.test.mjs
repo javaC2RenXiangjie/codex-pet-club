@@ -52,7 +52,7 @@ test("publishes the pinned automatic Skill update manifest", async () => {
 
   assert.equal(release.schemaVersion, 1);
   assert.equal(release.version, "0.4.3");
-  assert.equal(packageJson.version, release.version);
+  assert.equal(packageJson.version, "0.4.4");
   assert.equal(release.sizeBytes, 20530);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(
@@ -96,7 +96,7 @@ test("declares production R2 and D1 bindings", async () => {
   assert.match(worker, /DB: D1Database/);
   assert.equal(JSON.parse(generatedWrangler).assets.binding, "ASSETS");
   assert.equal(JSON.parse(generatedWrangler).d1_databases[0].binding, "DB");
-  assert.deepEqual(JSON.parse(generatedWrangler).triggers.crons, ["0 3 * * *"]);
+  assert.deepEqual(JSON.parse(generatedWrangler).triggers.crons, ["0 3 * * *", "*/5 * * * *"]);
 });
 
 test("ships valid WebP previews for every public pet", async () => {

@@ -4,6 +4,10 @@ import type {
 } from "@cloudflare/workers-types";
 import { unzipSync } from "fflate";
 import { findPublicPetByKey } from "./public-pet-catalog";
+import {
+  ensureReviewNotificationSchema,
+  reviewNotificationStatement,
+} from "./review-notifications";
 import { getPetRegistryBindings } from "./runtime-bindings";
 
 const MAX_PACKAGE_BYTES = 32 * 1024 * 1024;
@@ -480,6 +484,7 @@ export async function moderateSubmission(
   const id = safePublicId(publicId);
   const { db, files } = bindings();
   await ensureRegistrySchema(db);
+  await ensureReviewNotificationSchema(db);
   const current = await submissionRow(id);
   if (current.status !== "pending") {
     throw new RegistryError("Only pending submissions can be reviewed", 409);
@@ -523,6 +528,12 @@ export async function moderateSubmission(
     });
   }
   try {
+    const notification = reviewNotificationStatement(db, {
+      submissionId: current.id,
+      userId: current.owner_user_id,
+      action: status,
+      createdAt: now,
+    });
     await db.batch([
       db.prepare(
         `UPDATE pet_submissions
@@ -539,6 +550,7 @@ export async function moderateSubmission(
         id,
       ),
       moderationEventStatement(db, current, status, reviewNote, now),
+      ...(notification ? [notification] : []),
     ]);
   } catch (error) {
     if (publishedKey) await files.delete(publishedKey);
@@ -557,11 +569,18 @@ export async function unpublishSubmission(
   const id = safePublicId(publicId);
   const { db } = bindings();
   await ensureRegistrySchema(db);
+  await ensureReviewNotificationSchema(db);
   const current = await submissionRow(id);
   if (current.status !== "published") {
     throw new RegistryError("Only published submissions can be unpublished", 409);
   }
   const now = new Date().toISOString();
+  const notification = reviewNotificationStatement(db, {
+    submissionId: current.id,
+    userId: current.owner_user_id,
+    action: "unpublished",
+    createdAt: now,
+  });
   await db.batch([
     db
       .prepare(
@@ -571,6 +590,7 @@ export async function unpublishSubmission(
       )
       .bind(reviewNote.trim().slice(0, 500), now, now, id),
     moderationEventStatement(db, current, "unpublished", reviewNote, now),
+    ...(notification ? [notification] : []),
   ]);
   return toModerationSubmission(await submissionRow(id));
 }

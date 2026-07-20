@@ -123,3 +123,29 @@ export const authRateLimits = sqliteTable("auth_rate_limits", {
   attempts: integer("attempts").notNull().default(1),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const reviewNotifications = sqliteTable(
+  "review_notifications",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id").notNull(),
+    userId: text("user_id").notNull(),
+    action: text("action", {
+      enum: ["published", "rejected", "unpublished"],
+    }).notNull(),
+    status: text("status", {
+      enum: ["pending", "sending", "sent", "failed"],
+    }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error").notNull().default(""),
+    requestId: text("request_id"),
+    nextAttemptAt: integer("next_attempt_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    sentAt: text("sent_at"),
+  },
+  (table) => [
+    index("review_notifications_retry_idx").on(table.status, table.nextAttemptAt),
+    index("review_notifications_submission_idx").on(table.submissionId, table.createdAt),
+  ],
+);
