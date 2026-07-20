@@ -5,7 +5,7 @@
 生产发布只从与 `origin/main` 完全一致且没有未提交修改的 `main` 执行：
 
 ```bash
-npm run release:production -- --confirm
+node scripts/release-production.mjs --confirm
 ```
 
 脚本按固定顺序执行：代码检查与测试、生产 D1 导出、Wrangler 迁移、Worker 部署、生产烟测。任何一步失败都会停止后续操作。D1 导出保存在忽略提交的 `outputs/`，其中可能包含邮箱和 Key 哈希，不得上传到公开仓库或聊天。
