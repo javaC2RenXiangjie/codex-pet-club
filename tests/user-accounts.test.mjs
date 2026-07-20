@@ -157,7 +157,7 @@ print(json.dumps({
 
 test("backs up and restores account ownership with hashed keys", async () => {
   const backup = await readFile(new URL("../lib/registry-backup.ts", import.meta.url), "utf8");
-  assert.match(backup, /schemaVersion: 4/);
+  assert.match(backup, /schemaVersion: 5/);
   assert.match(backup, /users,/);
   assert.match(backup, /userApiKeys: apiKeys/);
 

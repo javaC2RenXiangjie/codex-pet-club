@@ -185,6 +185,7 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     license: "MIT",
     category: "robot",
     tags: ["测试"],
+    creatorId: null,
     version: "1.2.3",
     sha256,
     sizeBytes: packageBytes.length,
@@ -195,11 +196,15 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
     id: "community-pet-0002",
     petKey: "community-pet",
     displayName: "Community Pet",
+    author: "Community Creator",
+    creatorId: "11111111-1111-4111-8111-111111111111",
   };
   const server = createServer((request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (url.pathname === "/admin") {
       response.writeHead(200).end();
+    } else if (url.pathname === "/api/admin/pets/00000000-0000-4000-8000-000000000000/metadata") {
+      response.writeHead(401).end();
     } else if (url.pathname === "/api/admin/pets") {
       response.writeHead(401).end();
     } else if (url.pathname === "/api/admin/backups") {
@@ -216,6 +221,15 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
       response.writeHead(401).end();
     } else if (url.pathname.startsWith("/api/submissions/")) {
       response.writeHead(401).end();
+    } else if (url.pathname === `/api/creators/${communityPet.creatorId}`) {
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+        creator: {
+          id: communityPet.creatorId,
+          displayName: communityPet.author,
+          joinedAt: "2026-07-19T00:00:00.000Z",
+          pets: [communityPet],
+        },
+      }));
     } else if (
       url.pathname === "/api/pets"
       && request.method === "POST"
@@ -248,6 +262,8 @@ test("post-deploy smoke verifies metadata, access guard, preview, and package ha
       }).end(packageBytes);
     } else if (url.pathname === `/pets/${id}`) {
       response.writeHead(200, { "content-type": "text/html" }).end(`<h1>${publicPet.displayName}</h1>`);
+    } else if (url.pathname === `/creators/${communityPet.creatorId}`) {
+      response.writeHead(200, { "content-type": "text/html" }).end(`<h1>${communityPet.author}</h1>`);
     } else {
       response.writeHead(200, { "content-type": "text/html" }).end("ok");
     }

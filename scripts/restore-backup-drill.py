@@ -95,6 +95,16 @@ NOTIFICATION_COLUMNS = (
     "sent_at",
 )
 
+METADATA_EVENT_COLUMNS = (
+    "id",
+    "submission_id",
+    "actor_type",
+    "actor_user_id",
+    "before_json",
+    "after_json",
+    "created_at",
+)
+
 
 def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str, ...], rows: list[dict]) -> None:
     placeholders = ", ".join("?" for _ in columns)
@@ -108,16 +118,17 @@ def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str,
 def run_drill(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     schema_version = payload.get("schemaVersion")
-    if schema_version not in (1, 2, 3, 4) or payload.get("source") != "codex-pet-club-db":
+    if schema_version not in (1, 2, 3, 4, 5) or payload.get("source") != "codex-pet-club-db":
         raise ValueError("Unsupported backup schema")
     submissions = payload.get("submissions")
     events = payload.get("moderationEvents")
     users = payload.get("users", []) if schema_version >= 2 else []
     api_keys = payload.get("userApiKeys", []) if schema_version >= 2 else []
     notifications = payload.get("reviewNotifications", []) if schema_version >= 3 else []
-    if not all(isinstance(rows, list) for rows in (submissions, events, users, api_keys, notifications)):
+    metadata_events = payload.get("submissionMetadataEvents", []) if schema_version >= 5 else []
+    if not all(isinstance(rows, list) for rows in (submissions, events, users, api_keys, notifications, metadata_events)):
         raise ValueError("Backup rows are missing")
-    if not all(isinstance(row, dict) for row in [*submissions, *events, *users, *api_keys, *notifications]):
+    if not all(isinstance(row, dict) for row in [*submissions, *events, *users, *api_keys, *notifications, *metadata_events]):
         raise ValueError("Backup rows must be JSON objects")
 
     connection = sqlite3.connect(":memory:")
@@ -155,6 +166,12 @@ def run_drill(path: Path) -> dict[str, object]:
               next_attempt_at INTEGER NOT NULL, created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL, sent_at TEXT
             );
+            CREATE TABLE submission_metadata_events (
+              id TEXT PRIMARY KEY, submission_id TEXT NOT NULL,
+              actor_type TEXT NOT NULL, actor_user_id TEXT,
+              before_json TEXT NOT NULL, after_json TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            );
             """
         )
         with connection:
@@ -164,6 +181,7 @@ def run_drill(path: Path) -> dict[str, object]:
             restore_rows(connection, "users", USER_COLUMNS, users)
             restore_rows(connection, "user_api_keys", API_KEY_COLUMNS, api_keys)
             restore_rows(connection, "review_notifications", NOTIFICATION_COLUMNS, notifications)
+            restore_rows(connection, "submission_metadata_events", METADATA_EVENT_COLUMNS, metadata_events)
         restored_submissions = connection.execute(
             "SELECT COUNT(*) FROM pet_submissions"
         ).fetchone()[0]
@@ -175,12 +193,16 @@ def run_drill(path: Path) -> dict[str, object]:
         restored_notifications = connection.execute(
             "SELECT COUNT(*) FROM review_notifications"
         ).fetchone()[0]
+        restored_metadata_events = connection.execute(
+            "SELECT COUNT(*) FROM submission_metadata_events"
+        ).fetchone()[0]
         if (
             restored_submissions != len(submissions)
             or restored_events != len(events)
             or restored_users != len(users)
             or restored_api_keys != len(api_keys)
             or restored_notifications != len(notifications)
+            or restored_metadata_events != len(metadata_events)
         ):
             raise RuntimeError("Restored row count does not match the backup")
         return {
@@ -191,6 +213,7 @@ def run_drill(path: Path) -> dict[str, object]:
             "users": restored_users,
             "apiKeys": restored_api_keys,
             "notifications": restored_notifications,
+            "metadataChanges": restored_metadata_events,
             "target": "sqlite-memory",
         }
     finally:

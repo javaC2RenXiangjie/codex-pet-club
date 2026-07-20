@@ -17,6 +17,9 @@ type Submission = {
   description: string;
   author: string;
   license: string;
+  category: "character" | "animal" | "fantasy" | "robot" | "other";
+  tags: string[];
+  creatorId: string | null;
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
@@ -70,6 +73,7 @@ type RegistryBackup = {
   users: number;
   apiKeys: number;
   notifications: number;
+  metadataChanges: number;
 };
 
 type BackupVerification = {
@@ -81,6 +85,7 @@ type BackupVerification = {
   users: number;
   apiKeys: number;
   notifications: number;
+  metadataChanges: number;
 };
 
 type ReviewNotification = {
@@ -441,6 +446,7 @@ export default function AdminPage() {
   const [tokenInput, setTokenInput] = useState("");
   const [message, setMessage] = useState("");
   const [action, setAction] = useState<ReviewAction | null>(null);
+  const [metadataEdit, setMetadataEdit] = useState<Submission | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [reviewChecks, setReviewChecks] = useState<Record<ReviewCheckKey, boolean>>(
     emptyReviewChecklist,
@@ -583,6 +589,45 @@ export default function AdminPage() {
     );
     setReviewChecks(emptyReviewChecklist());
     setAction({ submission, status });
+  }
+
+  function openMetadataEditor(submission: Submission) {
+    setMetadataEdit({ ...submission, tags: [...submission.tags] });
+    setMessage("");
+  }
+
+  async function saveMetadata() {
+    if (!metadataEdit) return;
+    setProcessing(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/pets/${metadataEdit.id}/metadata`, {
+        method: "PATCH",
+        headers: adminHeaders(adminToken, true),
+        body: JSON.stringify({
+          metadata: {
+            displayName: metadataEdit.displayName,
+            description: metadataEdit.description,
+            license: metadataEdit.license,
+            category: metadataEdit.category,
+            tags: metadataEdit.tags,
+          },
+        }),
+      });
+      const data = (await response.json()) as { submission?: Submission; error?: string };
+      if (!response.ok || !data.submission) {
+        throw new Error(await apiError(response, "展示信息保存失败", data));
+      }
+      setSubmissions((items) => items.map((item) => (
+        item.id === data.submission?.id ? data.submission : item
+      )));
+      setMetadataEdit(null);
+      setMessage(`${data.submission.displayName} 的展示信息已更新`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "展示信息保存失败");
+    } finally {
+      setProcessing(false);
+    }
   }
 
   async function loadQueue(
@@ -994,6 +1039,7 @@ export default function AdminPage() {
                 <div><dt>创作者账户</dt><dd>{backups[0].users}</dd></div>
                 <div><dt>Skill Key</dt><dd>{backups[0].apiKeys}</dd></div>
                 <div><dt>邮件通知</dt><dd>{backups[0].notifications}</dd></div>
+                <div><dt>信息变更</dt><dd>{backups[0].metadataChanges}</dd></div>
                 <div><dt>文件大小</dt><dd>{formatBytes(backups[0].sizeBytes)}</dd></div>
               </dl>
             ) : (
@@ -1002,7 +1048,7 @@ export default function AdminPage() {
             {backupVerification && (
               <p className={backupVerification.restorable ? "admin-verify-ok" : "admin-verify-failed"}>
                 {backupVerification.restorable ? "✓ 恢复预检通过" : "! 恢复预检未通过"}
-                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.users} 个账户 · {backupVerification.apiKeys} 个 Key · {backupVerification.notifications} 条通知</small>
+                <small>{formatDate(backupVerification.verifiedAt)} · {backupVerification.submissions} 条投稿 · {backupVerification.users} 个账户 · {backupVerification.apiKeys} 个 Key · {backupVerification.notifications} 条通知 · {backupVerification.metadataChanges} 次信息变更</small>
               </p>
             )}
           </article>
@@ -1206,6 +1252,8 @@ export default function AdminPage() {
                     <div><dt>提交 ID</dt><dd>{submission.id}</dd></div>
                     <div><dt>作者</dt><dd>{submission.author || "未填写"}</dd></div>
                     <div><dt>许可证</dt><dd>{submission.license}</dd></div>
+                    <div><dt>分类</dt><dd>{submission.category}</dd></div>
+                    <div><dt>标签</dt><dd>{submission.tags.length ? submission.tags.map((tag) => `#${tag}`).join(" ") : "未设置"}</dd></div>
                     <div><dt>包大小</dt><dd>{formatBytes(submission.sizeBytes)}</dd></div>
                     <div><dt>SHA-256</dt><dd title={submission.sha256}>{submission.sha256.slice(0, 16)}…</dd></div>
                   </dl>
@@ -1233,6 +1281,12 @@ export default function AdminPage() {
                   {submission.reviewNote && (
                     <p className="admin-review-note"><strong>审核备注：</strong>{submission.reviewNote}</p>
                   )}
+
+                  <button
+                    className="admin-edit-metadata"
+                    onClick={() => openMetadataEditor(submission)}
+                    type="button"
+                  >编辑展示信息</button>
 
                   {submission.status === "pending" && (
                     <div className="admin-review-actions">
@@ -1368,6 +1422,72 @@ export default function AdminPage() {
                   : "选择常用原因或填写审核备注后才能继续。"}
               </small>
             )}
+          </section>
+        </div>
+      )}
+
+      {metadataEdit && (
+        <div className="admin-modal-backdrop" role="presentation">
+          <section className="admin-metadata-modal" role="dialog" aria-modal="true" aria-labelledby="metadata-title">
+            <button className="admin-modal-close" aria-label="关闭展示信息编辑" onClick={() => setMetadataEdit(null)}>×</button>
+            <span className="section-kicker">CATALOG METADATA</span>
+            <h2 id="metadata-title">编辑“{metadataEdit.displayName}”</h2>
+            <p>这些字段会影响公开目录、搜索和创作者主页；桌宠标识、作者归属和文件不会改变。</p>
+            <label>
+              展示名称
+              <input
+                maxLength={80}
+                onChange={(event) => setMetadataEdit((current) => current ? ({ ...current, displayName: event.target.value }) : current)}
+                value={metadataEdit.displayName}
+              />
+            </label>
+            <label>
+              作品介绍
+              <textarea
+                maxLength={500}
+                onChange={(event) => setMetadataEdit((current) => current ? ({ ...current, description: event.target.value }) : current)}
+                value={metadataEdit.description}
+              />
+            </label>
+            <div className="admin-metadata-modal-row">
+              <label>
+                分类
+                <select
+                  onChange={(event) => setMetadataEdit((current) => current ? ({ ...current, category: event.target.value as Submission["category"] }) : current)}
+                  value={metadataEdit.category}
+                >
+                  <option value="character">人物角色</option>
+                  <option value="animal">动物伙伴</option>
+                  <option value="fantasy">奇幻生物</option>
+                  <option value="robot">机器人</option>
+                  <option value="other">其他</option>
+                </select>
+              </label>
+              <label>
+                许可证
+                <input
+                  maxLength={80}
+                  onChange={(event) => setMetadataEdit((current) => current ? ({ ...current, license: event.target.value }) : current)}
+                  value={metadataEdit.license}
+                />
+              </label>
+            </div>
+            <label>
+              标签（逗号分隔，最多 8 个）
+              <input
+                onChange={(event) => setMetadataEdit((current) => current ? ({
+                  ...current,
+                  tags: event.target.value.split(/[,，]/u).map((tag) => tag.trim()).slice(0, 8),
+                }) : current)}
+                value={metadataEdit.tags.join("，")}
+              />
+            </label>
+            <div className="admin-modal-actions">
+              <button onClick={() => setMetadataEdit(null)}>取消</button>
+              <button className="admin-approve" disabled={processing} onClick={() => void saveMetadata()}>
+                {processing ? "保存中…" : "保存并更新目录"}
+              </button>
+            </div>
           </section>
         </div>
       )}

@@ -55,6 +55,25 @@ export const moderationEvents = sqliteTable(
   (table) => [index("moderation_events_created_idx").on(table.createdAt)],
 );
 
+export const submissionMetadataEvents = sqliteTable(
+  "submission_metadata_events",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id").notNull(),
+    actorType: text("actor_type", { enum: ["admin", "creator"] }).notNull(),
+    actorUserId: text("actor_user_id"),
+    beforeJson: text("before_json").notNull(),
+    afterJson: text("after_json").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("submission_metadata_events_submission_idx").on(
+      table.submissionId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const submissionRateLimits = sqliteTable("submission_rate_limits", {
   fingerprint: text("fingerprint").primaryKey(),
   windowStart: integer("window_start").notNull(),
