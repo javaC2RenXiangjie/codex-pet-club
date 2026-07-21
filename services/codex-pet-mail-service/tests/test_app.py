@@ -136,7 +136,7 @@ class MailServiceTest(unittest.TestCase):
         self.assertEqual(body["error"], "rate_limited")
 
     def test_sends_only_the_fixed_review_result_payload(self) -> None:
-        account_url = "https://codex-pet-club.renxiangjie.workers.dev/account"
+        account_url = "https://codex-pet-club.cpc-community.workers.dev/account"
         payload = {
             "email": "Creator@Example.com",
             "petName": "橘猫",
@@ -172,7 +172,7 @@ class MailServiceTest(unittest.TestCase):
             "petName": "Orange Kitty",
             "status": "rejected",
             "reviewNote": "",
-            "accountUrl": "https://codex-pet-club.renxiangjie.workers.dev/account",
+            "accountUrl": "https://codex-pet-club.cpc-community.workers.dev/account",
         }
         cases = [
             ({**valid, "petName": ""}, "invalid_pet_name"),

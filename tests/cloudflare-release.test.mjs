@@ -51,13 +51,13 @@ test("publishes the pinned automatic Skill update manifest", async () => {
   const packageJson = JSON.parse(packageText);
 
   assert.equal(release.schemaVersion, 1);
-  assert.equal(release.version, "0.4.3");
+  assert.equal(release.version, "0.4.4");
   assert.equal(packageJson.version, "0.6.0");
-  assert.equal(release.sizeBytes, 20530);
+  assert.equal(release.sizeBytes, 20535);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(
     release.archiveUrl,
-    "https://github.com/javaC2RenXiangjie/codex-pet-club-skill/releases/download/v0.4.3/codex-pet-club-skill-v0.4.3.zip",
+    "https://github.com/javaC2RenXiangjie/codex-pet-club-skill/releases/download/v0.4.4/codex-pet-club-skill-v0.4.4.zip",
   );
   assert.match(route, /registry\/skill-release\.json/);
   assert.match(route, /cache-control/);

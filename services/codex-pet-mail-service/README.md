@@ -38,7 +38,7 @@ Content-Type: application/json
   "petName": "Orange Kitty",
   "status": "published",
   "reviewNote": "图集检查通过",
-  "accountUrl": "https://codex-pet-club.renxiangjie.workers.dev/account"
+  "accountUrl": "https://codex-pet-club.cpc-community.workers.dev/account"
 }
 ```
 

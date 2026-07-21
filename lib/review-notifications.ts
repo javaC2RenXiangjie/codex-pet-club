@@ -5,7 +5,7 @@ import type {
 import { getPetRegistryBindings } from "./runtime-bindings";
 
 const MAX_AUTOMATIC_ATTEMPTS = 5;
-const REVIEW_ACCOUNT_URL = "https://codex-pet-club.renxiangjie.workers.dev/account";
+const REVIEW_ACCOUNT_URL = "https://codex-pet-club.cpc-community.workers.dev/account";
 const retryDelaysMs = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000];
 
 export type ReviewNotificationAction = "published" | "rejected" | "unpublished";

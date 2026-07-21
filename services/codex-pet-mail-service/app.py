@@ -23,7 +23,7 @@ MAX_BODY_BYTES = 4096
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 CODE_PATTERN = re.compile(r"^\d{6}$")
 REVIEW_STATUSES = {"published", "rejected", "unpublished"}
-ACCOUNT_URL = "https://codex-pet-club.renxiangjie.workers.dev/account"
+ACCOUNT_URL = "https://codex-pet-club.cpc-community.workers.dev/account"
 LOGGER = logging.getLogger("codex-pet-mail-service")
 
 

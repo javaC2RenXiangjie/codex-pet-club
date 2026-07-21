@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const baseUrl = (process.env.CODEX_PET_CLUB_API
-  || "https://codex-pet-club.renxiangjie.workers.dev").replace(/\/$/u, "");
+  || "https://codex-pet-club.cpc-community.workers.dev").replace(/\/$/u, "");
 const email = process.env.CODEX_PET_SMOKE_EMAIL?.trim() ?? "";
 
 if (!email) {

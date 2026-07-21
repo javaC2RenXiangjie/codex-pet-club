@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://codex-pet-club.renxiangjie.workers.dev"),
+  metadataBase: new URL("https://codex-pet-club.cpc-community.workers.dev"),
   title: "Codex Pet Club · 桌宠开源俱乐部",
   description: "发现、安装并分享经过审核的 Codex 动画桌宠。",
   openGraph: {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { validateCatalog } from "./pet-release.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultBaseUrl = "https://codex-pet-club.renxiangjie.workers.dev";
+const defaultBaseUrl = "https://codex-pet-club.cpc-community.workers.dev";
 const userAgent = "Codex-Pet-Club-Release-Smoke/1.0";
 const retryDelays = [0, 5_000, 10_000, 20_000, 30_000];
 const retryableStatuses = new Set([404, 408, 425, 429, 500, 502, 503, 504]);

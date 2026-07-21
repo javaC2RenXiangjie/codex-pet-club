@@ -16,7 +16,7 @@ function getBrowserOrigin() {
 }
 
 function getServerOrigin() {
-  return "https://codex-pet-club.renxiangjie.workers.dev";
+  return "https://codex-pet-club.cpc-community.workers.dev";
 }
 
 export default function SkillPage() {
@@ -92,7 +92,7 @@ export default function SkillPage() {
           <code>{skillRepositoryUrl}</code>
           <div className="skill-terminal-result">
             <span>✓</span>
-            <div><strong>codex-pet-club v0.4.3</strong><small>已安装，后续使用会自动保持最新</small></div>
+            <div><strong>codex-pet-club v0.4.4</strong><small>已安装，后续使用会自动保持最新</small></div>
           </div>
         </div>
       </section>
