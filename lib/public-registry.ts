@@ -8,6 +8,7 @@ import {
 } from "./public-pet-catalog";
 import {
   getPublishedPet,
+  listHomepageCommunityPets,
   listPublishedPets,
   RegistryError,
   type PublicPet as CommunityPet,
@@ -34,6 +35,22 @@ export type PublicCatalogPage = {
   tags: Array<{ name: string; count: number }>;
 };
 
+export type HomepagePetCollection = {
+  pets: PublicPet[];
+  heroPetId: string | null;
+  generatedAt: string;
+};
+
+function removeHomepageCurationFields<T extends PublicPet & {
+  homepageFeatured: boolean;
+  homepagePriority: number;
+}>(candidate: T): PublicPet {
+  const pet = { ...candidate };
+  Reflect.deleteProperty(pet, "homepageFeatured");
+  Reflect.deleteProperty(pet, "homepagePriority");
+  return pet;
+}
+
 function communityStorageAvailable() {
   const bindings = getPetRegistryBindings();
   return Boolean(bindings?.DB && bindings.PET_FILES);
@@ -51,6 +68,54 @@ export async function listAllPublicPets(): Promise<PublicPet[]> {
       (pet) => !officialIds.has(pet.id) && !officialKeys.has(pet.petKey),
     ),
   ];
+}
+
+export async function listHomepagePets(limit = 5): Promise<HomepagePetCollection> {
+  const safeLimit = Math.min(5, Math.max(1, Math.trunc(limit) || 5));
+  const bundled = officialPets.map((pet) => ({
+    ...pet,
+    homepageFeatured: false,
+    homepagePriority: 0,
+  }));
+  const community = communityStorageAvailable() ? await listHomepageCommunityPets() : [];
+  const bundledIds = new Set(bundled.map((pet) => pet.id));
+  const bundledKeys = new Set(bundled.map((pet) => pet.petKey));
+  const candidates = [
+    ...bundled,
+    ...community.filter((pet) => !bundledIds.has(pet.id) && !bundledKeys.has(pet.petKey)),
+  ];
+  const featured = candidates
+    .filter((pet) => pet.homepageFeatured)
+    .sort((left, right) => (
+      right.homepagePriority - left.homepagePriority
+      || right.updatedAt.localeCompare(left.updatedAt)
+    ));
+  const selected = featured.slice(0, safeLimit);
+  const selectedIds = new Set(selected.map((pet) => pet.id));
+  const selectedCategories = new Set(selected.map((pet) => pet.category));
+  const fallback = candidates
+    .filter((pet) => !selectedIds.has(pet.id))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+
+  for (const pet of fallback) {
+    if (selected.length >= safeLimit) break;
+    if (selectedCategories.has(pet.category)) continue;
+    selected.push(pet);
+    selectedIds.add(pet.id);
+    selectedCategories.add(pet.category);
+  }
+  for (const pet of fallback) {
+    if (selected.length >= safeLimit) break;
+    if (selectedIds.has(pet.id)) continue;
+    selected.push(pet);
+    selectedIds.add(pet.id);
+  }
+
+  return {
+    pets: selected.map(removeHomepageCurationFields),
+    heroPetId: selected[0]?.id ?? null,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 function safeSort(value: string | null | undefined): PublicCatalogSort {

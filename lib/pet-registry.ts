@@ -52,6 +52,9 @@ type PetRow = {
   reviewed_at: string | null;
   review_note: string;
   owner_user_id: string | null;
+  is_official: number;
+  homepage_featured: number;
+  homepage_priority: number;
 };
 
 export type PublicPet = {
@@ -68,6 +71,12 @@ export type PublicPet = {
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
+  isOfficial: boolean;
+};
+
+export type HomepagePetCandidate = PublicPet & {
+  homepageFeatured: boolean;
+  homepagePriority: number;
 };
 
 export type ModerationSubmission = PublicPet & {
@@ -203,7 +212,10 @@ export async function ensureRegistrySchema(db: D1Database) {
       published_at TEXT,
       reviewed_at TEXT,
       review_note TEXT NOT NULL DEFAULT '',
-      owner_user_id TEXT
+      owner_user_id TEXT,
+      is_official INTEGER NOT NULL DEFAULT 0 CHECK (is_official IN (0, 1)),
+      homepage_featured INTEGER NOT NULL DEFAULT 0 CHECK (homepage_featured IN (0, 1)),
+      homepage_priority INTEGER NOT NULL DEFAULT 0 CHECK (homepage_priority BETWEEN 0 AND 100)
     )`),
     db.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS pet_published_slug_unique ON pet_submissions(slug) WHERE status = 'published'",
@@ -271,6 +283,21 @@ export async function ensureRegistrySchema(db: D1Database) {
       db.prepare("ALTER TABLE pet_submissions ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"),
     );
   }
+  if (!names.has("is_official")) {
+    additions.push(
+      db.prepare("ALTER TABLE pet_submissions ADD COLUMN is_official INTEGER NOT NULL DEFAULT 0"),
+    );
+  }
+  if (!names.has("homepage_featured")) {
+    additions.push(
+      db.prepare("ALTER TABLE pet_submissions ADD COLUMN homepage_featured INTEGER NOT NULL DEFAULT 0"),
+    );
+  }
+  if (!names.has("homepage_priority")) {
+    additions.push(
+      db.prepare("ALTER TABLE pet_submissions ADD COLUMN homepage_priority INTEGER NOT NULL DEFAULT 0"),
+    );
+  }
   if (additions.length) {
     await db.batch(additions);
   }
@@ -279,6 +306,9 @@ export async function ensureRegistrySchema(db: D1Database) {
   ).run();
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS pet_published_category_updated_idx ON pet_submissions(status, category, published_at DESC)",
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS pet_homepage_featured_idx ON pet_submissions(status, homepage_featured, homepage_priority DESC, published_at DESC)",
   ).run();
 }
 
@@ -305,6 +335,7 @@ function toPublicPet(row: PetRow): PublicPet {
     sha256: row.sha256,
     sizeBytes: row.size_bytes,
     updatedAt: row.published_at ?? row.updated_at,
+    isOfficial: row.is_official === 1,
   };
 }
 
@@ -377,7 +408,7 @@ function moderationEventStatement(
 
 const submissionColumns = `id, slug, name, description, author, license, category, tags, status,
   file_key, sha256, size_bytes, created_at, updated_at, published_at,
-  reviewed_at, review_note, owner_user_id`;
+  reviewed_at, review_note, owner_user_id, is_official, homepage_featured, homepage_priority`;
 
 export async function listPublishedPets(): Promise<PublicPet[]> {
   const { db } = bindings();
@@ -392,6 +423,87 @@ export async function listPublishedPets(): Promise<PublicPet[]> {
     )
     .all<PetRow>();
   return (result.results ?? []).map(toPublicPet);
+}
+
+export async function listHomepageCommunityPets(): Promise<HomepagePetCandidate[]> {
+  const { db, files } = bindings();
+  await ensureRegistrySchema(db);
+  const result = await db
+    .prepare(
+      `SELECT ${submissionColumns}
+       FROM pet_submissions
+       WHERE status = 'published'
+       ORDER BY homepage_featured DESC, homepage_priority DESC, published_at DESC, updated_at DESC
+       LIMIT 60`,
+    )
+    .all<PetRow>();
+  const available = await Promise.all((result.results ?? []).map(async (row) => ({
+    row,
+    exists: Boolean(await files.head(row.file_key)),
+  })));
+  return available
+    .filter((candidate) => candidate.exists)
+    .map(({ row }) => ({
+      ...toPublicPet(row),
+      homepageFeatured: row.homepage_featured === 1,
+      homepagePriority: Math.max(0, Math.min(100, row.homepage_priority || 0)),
+    }));
+}
+
+export async function updateHomepagePresentation(
+  publicId: string,
+  input: { isOfficial?: unknown; featured?: unknown; priority?: unknown },
+) {
+  const { db } = bindings();
+  await ensureRegistrySchema(db);
+  const current = await submissionRow(publicId);
+  if (current.status !== "published") {
+    throw new RegistryError("Only published pets can be curated for the homepage", 409);
+  }
+  if (input.isOfficial !== undefined && typeof input.isOfficial !== "boolean") {
+    throw new RegistryError("isOfficial must be a boolean");
+  }
+  if (input.featured !== undefined && typeof input.featured !== "boolean") {
+    throw new RegistryError("featured must be a boolean");
+  }
+  if (
+    input.priority !== undefined
+    && (!Number.isInteger(input.priority) || Number(input.priority) < 0 || Number(input.priority) > 100)
+  ) {
+    throw new RegistryError("priority must be an integer between 0 and 100");
+  }
+
+  const isOfficial = input.isOfficial === undefined
+    ? current.is_official
+    : input.isOfficial ? 1 : 0;
+  const featured = input.featured === undefined
+    ? current.homepage_featured
+    : input.featured ? 1 : 0;
+  const priority = featured === 0
+    ? 0
+    : input.priority === undefined
+      ? Math.max(0, Math.min(100, current.homepage_priority || 0))
+      : Number(input.priority);
+  const author = isOfficial === 1 ? "Codex Pet Club 官方" : current.author;
+  const updatedAt = new Date().toISOString();
+  await db.prepare(
+    `UPDATE pet_submissions
+     SET is_official = ?, homepage_featured = ?, homepage_priority = ?, author = ?, updated_at = ?
+     WHERE id = ? AND status = 'published'`,
+  ).bind(isOfficial, featured, priority, author, updatedAt, current.id).run();
+
+  return {
+    pet: toPublicPet({
+      ...current,
+      is_official: isOfficial,
+      homepage_featured: featured,
+      homepage_priority: priority,
+      author,
+      updated_at: updatedAt,
+    }),
+    homepageFeatured: featured === 1,
+    homepagePriority: priority,
+  };
 }
 
 function safePublicId(value: string) {

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { SiteFooter } from "../components/site-footer";
+import { PublicSiteHeader } from "../components/public-site-header";
 
 export const metadata = {
   title: "使用与投稿规则 · Codex Pet Club",
@@ -9,13 +9,7 @@ export const metadata = {
 export default function TermsPage() {
   return (
     <main className="policy-shell">
-      <header className="site-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>使用与投稿规则</small></span>
-        </Link>
-        <nav aria-label="投稿规则页面导航"><Link href="/">桌宠库</Link><Link href="/privacy">隐私说明</Link></nav>
-      </header>
+      <PublicSiteHeader subtitle="使用与投稿规则" />
       <article className="policy-document">
         <header><span>TERMS / 2026-07-20</span><h1>使用与投稿规则</h1><p>这里是一座由创作者共同维护的 Codex 桌宠库。投稿意味着你理解并同意以下规则。</p></header>
         <section><h2>投稿者的确认</h2><ul><li>你拥有作品，或已获得足够授权，可以按投稿时填写的许可证公开分享。</li><li>作品不得侵犯他人的著作权、商标权、肖像权、隐私或其他合法权益。</li><li>作品不得包含恶意代码、隐藏下载器、凭证、跟踪组件或与桌宠无关的可执行内容。</li><li>作品信息、作者名称和许可证应真实、清晰，不冒充其他创作者或官方内容。</li></ul></section>

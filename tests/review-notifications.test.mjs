@@ -40,7 +40,7 @@ test("retries review mail every five minutes and backs delivery records up", asy
   ]);
   assert.match(worker, /retryReviewNotifications/);
   assert.match(vite, /"\*\/5 \* \* \* \*"/);
-  assert.match(backup, /schemaVersion: 5/);
+  assert.match(backup, /schemaVersion: 6/);
   assert.match(backup, /reviewNotifications: notifications/);
   assert.match(restore, /review_notifications/);
   assert.match(adminPage, /审核邮件/);

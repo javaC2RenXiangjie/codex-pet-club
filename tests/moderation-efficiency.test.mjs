@@ -63,7 +63,7 @@ test("licenses system code separately from submitted pet artwork", async () => {
   ]);
 
   assert.match(license, /^MIT License/);
-  assert.equal(packageJson.version, "0.5.3");
+  assert.equal(packageJson.version, "0.6.0");
   assert.equal(packageJson.license, "MIT");
   assert.match(readme, /用户投稿的桌宠、角色形象、图集/);
   assert.match(terms, /不自动覆盖用户投稿的角色形象/);

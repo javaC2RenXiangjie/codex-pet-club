@@ -54,6 +54,7 @@ export type PublicPet = {
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
+  isOfficial: boolean;
 };
 
 export type PublicPetAsset = PublicPet & {
@@ -98,6 +99,7 @@ function resolvePublishedPet(pet: CatalogPet): PublicPetAsset | null {
     sha256: release.sha256,
     sizeBytes: release.sizeBytes,
     updatedAt: release.publishedAt,
+    isOfficial: false,
     packageKey: release.packageKey,
     previewPath: release.previewPath,
   };
@@ -118,6 +120,7 @@ export function toPublicPet(pet: PublicPetAsset): PublicPet {
     sha256: pet.sha256,
     sizeBytes: pet.sizeBytes,
     updatedAt: pet.updatedAt,
+    isOfficial: pet.isOfficial,
   };
 }
 

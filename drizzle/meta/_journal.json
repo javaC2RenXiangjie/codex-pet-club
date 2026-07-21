@@ -43,6 +43,13 @@
       "when": 1784519512622,
       "tag": "0005_eminent_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784541082436,
+      "tag": "0006_tidy_talon",
+      "breakpoints": true
     }
   ]
 }

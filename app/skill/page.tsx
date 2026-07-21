@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { SiteFooter } from "../components/site-footer";
+import { PublicSiteHeader } from "../components/public-site-header";
 import { useState, useSyncExternalStore } from "react";
 
 const skillRepositoryUrl = "https://github.com/javaC2RenXiangjie/codex-pet-club-skill";
@@ -66,21 +67,7 @@ export default function SkillPage() {
 
   return (
     <main className="skill-page-shell">
-      <header className="site-header">
-        <Link className="brand" href="/" aria-label="返回 Codex Pet Club 桌宠库">
-          <span className="brand-mark">C:</span>
-          <span>
-            <strong>Codex Pet Club</strong>
-            <small>官方 Skill</small>
-          </span>
-        </Link>
-        <nav aria-label="Skill 页面导航">
-          <Link href="/">桌宠库</Link>
-          <Link href="/account">创作者账户</Link>
-          <a href={skillRepositoryUrl} target="_blank" rel="noreferrer">GitHub</a>
-          <Link className="nav-submit" href="/">返回桌宠库</Link>
-        </nav>
-      </header>
+      <PublicSiteHeader subtitle="官方 Skill" />
 
       <section className="skill-page-hero">
         <div>

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { SiteFooter } from "../components/site-footer";
+import { PublicSiteHeader } from "../components/public-site-header";
 
 export const metadata = {
   title: "隐私说明 · Codex Pet Club",
@@ -9,13 +9,7 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="policy-shell">
-      <header className="site-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>隐私说明</small></span>
-        </Link>
-        <nav aria-label="隐私页面导航"><Link href="/">桌宠库</Link><Link href="/terms">使用与投稿规则</Link></nav>
-      </header>
+      <PublicSiteHeader subtitle="隐私说明" />
       <article className="policy-document">
         <header><span>PRIVACY / 2026-07-20</span><h1>隐私说明</h1><p>我们只收集运行创作者账户、投稿审核和桌宠安装服务所必需的数据。</p></header>
         <section><h2>我们保存什么</h2><ul><li>注册邮箱、创作者名称和系统生成的用户 ID。</li><li>Skill Key 的哈希、前缀、创建时间、撤销时间和最近使用时间；服务器不保存可再次展示的 Key 原文。</li><li>投稿文件、作品信息、审核状态、审核备注和通知投递记录。</li><li>浏览器会话、验证码记录及用于防滥用的来源指纹；来源地址只用于生成不可逆的限流指纹。</li><li>服务运行所需的安全日志、备份和恢复验证结果。</li></ul></section>

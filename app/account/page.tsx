@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { SiteFooter } from "../components/site-footer";
+import { PublicSiteHeader } from "../components/public-site-header";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type AccountUser = {
@@ -318,17 +319,7 @@ export default function AccountPage() {
 
   return (
     <main className="account-shell">
-      <header className="site-header">
-        <Link className="brand" href="/" aria-label="返回 Codex Pet Club 桌宠库">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>创作者账户</small></span>
-        </Link>
-        <nav aria-label="账户页面导航">
-          <Link href="/">桌宠库</Link>
-          <Link href="/skill">安装 Skill</Link>
-          <Link className="nav-submit" href="/">返回桌宠库</Link>
-        </nav>
-      </header>
+      <PublicSiteHeader subtitle="创作者账户" />
 
       {loading ? (
         <section className="account-loading">正在读取创作者账户…</section>

@@ -29,7 +29,7 @@ test("public creator profiles contain published work without private account fie
     readFile(new URL("../lib/pet-registry.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/creators/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/creators/[id]/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pets/pet-catalog-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/pets/[id]/pet-detail-client.tsx", import.meta.url), "utf8"),
   ]);
 
@@ -39,7 +39,7 @@ test("public creator profiles contain published work without private account fie
   assert.match(apiRoute, /getPublicCreatorProfile/);
   assert.doesNotMatch(apiRoute, /email|api.?key|credential/i);
   assert.match(creatorPage, /creator\.pets/);
-  assert.match(catalogPage, /\/creators\/\$\{pet\.creatorId\}/);
+  assert.match(catalogPage, /pet\.author \|\| "社区创作者"/);
   assert.match(detailClient, /\/creators\/\$\{pet\.creatorId\}/);
 });
 
@@ -52,9 +52,9 @@ test("v0.5.2 migration and backup preserve metadata audit history", async () => 
 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS submission_metadata_events/);
   assert.match(migration, /submission_metadata_events_submission_idx/);
-  assert.match(backup, /schemaVersion: 5/);
+  assert.match(backup, /schemaVersion: 6/);
   assert.match(backup, /submissionMetadataEvents: metadataChanges/);
-  assert.match(restore, /schema_version not in \(1, 2, 3, 4, 5\)/);
+  assert.match(restore, /schema_version not in \(1, 2, 3, 4, 5, 6\)/);
   assert.match(restore, /submission_metadata_events/);
 
   const script = String.raw`

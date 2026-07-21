@@ -25,7 +25,7 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders the finished Codex Pet Club catalog", async () => {
+test("server-renders the data-driven Codex Pet Club story", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -33,10 +33,12 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
   const html = await response.text();
   assert.match(html, /<html lang="zh-CN">/i);
   assert.match(html, /<title>Codex Pet Club · 桌宠开源俱乐部<\/title>/i);
-  assert.match(html, /给你的 Codex/);
+  assert.match(html, /想给 Codex/);
+  assert.match(html, /找个桌面搭档/);
   assert.match(html, /桌宠库/);
-  assert.match(html, /复制唯一 ID/);
-  assert.match(html, /SKILL ONLY/);
+  assert.match(html, /把 ID/);
+  assert.match(html, /直接发给 Codex/);
+  assert.match(html, /进入桌宠库/);
   assert.match(html, /安装 Skill/);
   assert.match(html, /href="\/skill"/);
   assert.match(html, /分享我的桌宠/);
@@ -47,21 +49,22 @@ test("server-renders the finished Codex Pet Club catalog", async () => {
 });
 
 test("ships only the official Skill and removes direct pet downloads", async () => {
-  const [page, skillPage, layout, packageJson] = await Promise.all([
+  const [page, catalogPage, detailPage, skillPage, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pets/pet-catalog-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pets/[id]/pet-detail-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/skill/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /type RegistryPet/);
-  assert.match(page, /copyPetCommand/);
-  assert.match(page, /UNIQUE PET ID/);
   assert.doesNotMatch(page, /-source\.zip|contributor-template\.zip|拿源文件/);
   assert.doesNotMatch(page, /codex-pet-club-skill\.zip/);
   assert.doesNotMatch(page, /OFFICIAL CODEX SKILL/);
-  assert.match(page, /href="\/skill"/);
-  assert.match(page, /navigator\.clipboard\.writeText/);
+  assert.match(page, /href="\/skill#publish"/);
+  assert.match(catalogPage, /href={`\/pets\/\$\{pet\.id\}`}/);
+  assert.match(detailPage, /UNIQUE PET ID/);
+  assert.match(detailPage, /navigator\.clipboard\.writeText/);
   assert.doesNotMatch(skillPage, /codex-pet-club-skill\.zip/);
   assert.match(skillPage, /https:\/\/github\.com\/javaC2RenXiangjie\/codex-pet-club-skill/);
   assert.match(skillPage, /OFFICIAL CODEX SKILL/);
@@ -172,7 +175,8 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
   assert.match(spriteRoute, /image\/webp/);
   assert.match(publicPreviewRoute, /resolvePublicPet/);
   assert.match(publicPreviewRoute, /public, max-age=86400, immutable/);
-  assert.match(player, /setInterval/);
+  assert.match(player, /setTimeout/);
+  assert.match(player, /action\.frameDurations\[frame\]/);
   assert.match(player, /backgroundPosition/);
   assert.match(player, /向右移动/);
   assert.match(player, /审核/);
@@ -184,25 +188,25 @@ test("exposes moderation list, decision, and sprite preview routes", async () =>
 });
 
 test("published cards use the real animated pet preview", async () => {
-  const [page, player] = await Promise.all([
+  const [story, catalog, player] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pets/pet-catalog-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/pet-sprite-player.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /PetSpritePlayer/);
-  assert.match(page, /\/api\/pets\/\$\{pet\.id\}\/preview/);
-  assert.match(page, /LIVE IDLE/);
-  assert.match(page, /setSelectedPet\(pet\)/);
-  assert.match(page, /data-testid={`open-pet-/);
-  assert.match(page, /data-testid="pet-detail-modal"/);
-  assert.match(page, /PET_ACTIONS\.map/);
-  assert.match(page, /查看全部动作/);
-  assert.match(page, /size="detail"/);
-  assert.doesNotMatch(page, /pet\.displayName\.slice\(0, 1\)/);
-  assert.match(player, /% 8/);
+  assert.match(story, /PetSpritePlayer/);
+  assert.match(story, /\/api\/pets\/\$\{pet\.id\}\/preview/);
+  assert.match(story, /active={activeStep/);
+  assert.match(story, /size="detail"/);
+  assert.match(catalog, /ViewportPetSprite/);
+  assert.match(catalog, /href={`\/pets\/\$\{pet\.id\}`}/);
+  assert.doesNotMatch(catalog, /setSelectedPet|pet-detail-modal/);
+  assert.match(player, /% action\.frameDurations\.length/);
+  assert.doesNotMatch(player, /% 8/);
   assert.match(player, /frame \/ 7/);
   assert.match(player, /row \/ 10/);
   assert.match(player, /"card" \| "admin" \| "detail"/);
+  assert.match(player, /if \(!active\) return/);
 });
 
 test("opens moderated uploads while keeping admin APIs authenticated", async () => {

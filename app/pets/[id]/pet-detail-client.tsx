@@ -8,6 +8,7 @@ import {
   type PetActionRow,
 } from "../../components/pet-sprite-player";
 import { SiteFooter } from "../../components/site-footer";
+import { PublicSiteHeader } from "../../components/public-site-header";
 
 type PublicPet = {
   id: string;
@@ -23,6 +24,7 @@ type PublicPet = {
   sha256: string;
   sizeBytes: number;
   updatedAt: string;
+  isOfficial: boolean;
 };
 
 const categoryLabels: Record<string, string> = {
@@ -61,21 +63,12 @@ export function PetDetailClient({ pet }: { pet: PublicPet }) {
 
   return (
     <main className="pet-detail-page">
-      <header className="site-header">
-        <Link className="brand" href="/" aria-label="Codex Pet Club 首页">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>桌宠开源俱乐部</small></span>
-        </Link>
-        <nav aria-label="主导航">
-          <Link href="/#catalog">桌宠库</Link>
-          <Link href="/skill">安装 Skill</Link>
-          <button className="pet-share-link" onClick={copyLink}>复制详情链接 ↗</button>
-        </nav>
-      </header>
+      <PublicSiteHeader subtitle="桌宠独立详情" />
 
       <div className="pet-detail-breadcrumb">
-        <Link href="/#catalog">← 返回桌宠库</Link>
+        <Link href="/pets">← 返回桌宠库</Link>
         <span>独立详情 / {pet.id}</span>
+        <button className="pet-share-link" onClick={copyLink}>复制详情链接 ↗</button>
       </div>
 
       <section className="pet-detail-modal pet-detail-modal--page" aria-labelledby="pet-detail-title">

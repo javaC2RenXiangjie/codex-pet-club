@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PetSpritePlayer } from "../../components/pet-sprite-player";
 import { SiteFooter } from "../../components/site-footer";
+import { PublicSiteHeader } from "../../components/public-site-header";
 import {
   getPublicCreatorProfile,
   RegistryError,
@@ -43,20 +44,10 @@ export default async function CreatorPage({ params }: PageProps) {
   if (!creator) notFound();
   return (
     <main className="creator-page">
-      <header className="site-header">
-        <Link className="brand" href="/" aria-label="Codex Pet Club 首页">
-          <span className="brand-mark">C:</span>
-          <span><strong>Codex Pet Club</strong><small>公开创作者主页</small></span>
-        </Link>
-        <nav aria-label="主导航">
-          <Link href="/#catalog">桌宠库</Link>
-          <Link href="/skill">安装 Skill</Link>
-          <Link href="/account">创作者账户</Link>
-        </nav>
-      </header>
+      <PublicSiteHeader subtitle="公开创作者主页" />
 
       <section className="creator-hero">
-        <Link href="/#catalog">← 返回桌宠库</Link>
+        <Link href="/pets">← 返回桌宠库</Link>
         <div className="creator-avatar">{creator.displayName.slice(0, 1).toUpperCase()}</div>
         <span className="section-kicker">VERIFIED CREATOR</span>
         <h1>{creator.displayName}</h1>

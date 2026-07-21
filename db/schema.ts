@@ -26,6 +26,9 @@ export const petSubmissions = sqliteTable(
     reviewedAt: text("reviewed_at"),
     reviewNote: text("review_note").notNull().default(""),
     ownerUserId: text("owner_user_id"),
+    isOfficial: integer("is_official", { mode: "boolean" }).notNull().default(false),
+    homepageFeatured: integer("homepage_featured", { mode: "boolean" }).notNull().default(false),
+    homepagePriority: integer("homepage_priority").notNull().default(0),
   },
   (table) => [
     uniqueIndex("pet_published_slug_unique")
@@ -34,6 +37,12 @@ export const petSubmissions = sqliteTable(
     index("pet_published_category_updated_idx").on(
       table.status,
       table.category,
+      table.publishedAt,
+    ),
+    index("pet_homepage_featured_idx").on(
+      table.status,
+      table.homepageFeatured,
+      table.homepagePriority,
       table.publishedAt,
     ),
   ],

@@ -95,7 +95,7 @@ test("lists and opens only the authenticated creator's submissions", async () =>
 
 test("renders a creator account and Key management workspace", async () => {
   const account = await readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8");
-  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const header = await readFile(new URL("../app/components/public-site-header.tsx", import.meta.url), "utf8");
 
   assert.match(account, /让每一只桌宠/);
   assert.match(account, /最多 3 个 Skill Key/);
@@ -108,7 +108,7 @@ test("renders a creator account and Key management workspace", async () => {
   assert.match(account, /查看详情/);
   assert.match(account, /复制安装指令/);
   assert.doesNotMatch(account, /localStorage|sessionStorage/);
-  assert.match(page, /href="\/account"/);
+  assert.match(header, /href="\/account"/);
 });
 
 test("migrates the existing registry without recreating operational tables", async () => {
@@ -157,7 +157,7 @@ print(json.dumps({
 
 test("backs up and restores account ownership with hashed keys", async () => {
   const backup = await readFile(new URL("../lib/registry-backup.ts", import.meta.url), "utf8");
-  assert.match(backup, /schemaVersion: 5/);
+  assert.match(backup, /schemaVersion: 6/);
   assert.match(backup, /users,/);
   assert.match(backup, /userApiKeys: apiKeys/);
 

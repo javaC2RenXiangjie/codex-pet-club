@@ -49,6 +49,13 @@ SUBMISSION_COLUMNS_V4 = (
     "owner_user_id",
 )
 
+SUBMISSION_COLUMNS_V6 = (
+    *SUBMISSION_COLUMNS_V4,
+    "is_official",
+    "homepage_featured",
+    "homepage_priority",
+)
+
 EVENT_COLUMNS = (
     "id",
     "submission_id",
@@ -118,7 +125,7 @@ def restore_rows(connection: sqlite3.Connection, table: str, columns: tuple[str,
 def run_drill(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     schema_version = payload.get("schemaVersion")
-    if schema_version not in (1, 2, 3, 4, 5) or payload.get("source") != "codex-pet-club-db":
+    if schema_version not in (1, 2, 3, 4, 5, 6) or payload.get("source") != "codex-pet-club-db":
         raise ValueError("Unsupported backup schema")
     submissions = payload.get("submissions")
     events = payload.get("moderationEvents")
@@ -142,7 +149,10 @@ def run_drill(path: Path) -> dict[str, object]:
               category TEXT NOT NULL DEFAULT 'other', tags TEXT NOT NULL DEFAULT '[]',
               file_key TEXT NOT NULL, sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL,
               created_at TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,
-              reviewed_at TEXT, review_note TEXT NOT NULL DEFAULT '', owner_user_id TEXT
+              reviewed_at TEXT, review_note TEXT NOT NULL DEFAULT '', owner_user_id TEXT,
+              is_official INTEGER NOT NULL DEFAULT 0,
+              homepage_featured INTEGER NOT NULL DEFAULT 0,
+              homepage_priority INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE moderation_events (
               id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, pet_key TEXT NOT NULL,
@@ -175,7 +185,11 @@ def run_drill(path: Path) -> dict[str, object]:
             """
         )
         with connection:
-            submission_columns = SUBMISSION_COLUMNS_V4 if schema_version >= 4 else SUBMISSION_COLUMNS_V3
+            submission_columns = (
+                SUBMISSION_COLUMNS_V6 if schema_version >= 6
+                else SUBMISSION_COLUMNS_V4 if schema_version >= 4
+                else SUBMISSION_COLUMNS_V3
+            )
             restore_rows(connection, "pet_submissions", submission_columns, submissions)
             restore_rows(connection, "moderation_events", EVENT_COLUMNS, events)
             restore_rows(connection, "users", USER_COLUMNS, users)

@@ -52,7 +52,7 @@ test("publishes the pinned automatic Skill update manifest", async () => {
 
   assert.equal(release.schemaVersion, 1);
   assert.equal(release.version, "0.4.3");
-  assert.equal(packageJson.version, "0.5.3");
+  assert.equal(packageJson.version, "0.6.0");
   assert.equal(release.sizeBytes, 20530);
   assert.match(release.sha256, /^[a-f0-9]{64}$/);
   assert.equal(
@@ -196,16 +196,19 @@ test("has no seed endpoint or deploy-time secret in the final tree", async () =>
   await assert.rejects(access(new URL("../.env", import.meta.url)));
 });
 
-test("keeps the catalog and Skill installation as separate pages", async () => {
-  const [catalogPage, skillPage] = await Promise.all([
+test("keeps the story, catalog, and Skill installation as separate pages", async () => {
+  const [storyPage, catalogPage, skillPage] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pets/pet-catalog-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/skill/page.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(catalogPage, /查看全部动作/);
-  assert.match(catalogPage, /data-testid="pet-detail-modal"/);
-  assert.match(catalogPage, /href="\/skill"/);
-  assert.doesNotMatch(catalogPage, /codex-pet-club-skill\.zip/);
+  assert.match(storyPage, /\/api\/homepage\/pets/);
+  assert.match(storyPage, /data-story-step="4"/);
+  assert.match(storyPage, /href="\/pets"/);
+  assert.match(catalogPage, /查看九种动作与安装方式/);
+  assert.match(catalogPage, /href={`\/pets\/\$\{pet\.id\}`}/);
+  assert.doesNotMatch(catalogPage, /pet-detail-modal|setSelectedPet/);
   assert.doesNotMatch(skillPage, /codex-pet-club-skill\.zip/);
   assert.match(skillPage, /codex-pet-club-skill/);
 });
